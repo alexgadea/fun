@@ -16,10 +16,9 @@ data Theory = Theory {
                tname :: Text
              , indType :: IndType
              , operators :: [Operator] -- En esta lista no se incluye a los constructores.
-             , functions :: [Func]
              , quantifiers :: [Quantifier]
              , axioms :: [Axiom]
-             , theorems :: [Theorem]
+             , theorytheorems :: [Theorem]
             }
             
             

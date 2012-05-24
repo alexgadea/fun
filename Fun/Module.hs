@@ -6,7 +6,11 @@ import Data.Text
 
 type ModName = Text
 
-data Module = Module ModName [Import] [Decl]
+data Module = Module {
+                modName :: ModName 
+              , imports :: [Import]
+              , decls   :: [Decl]
+            }
 
 data Import = Import Module
 

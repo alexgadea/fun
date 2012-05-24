@@ -2,6 +2,7 @@ module Fun.IndType where
 
 import Equ.Types
 import Equ.Syntax
+import Equ.PreExpr
 import Equ.TypeChecker(unifyTest)
 
 import Data.Text hiding (map)
@@ -47,3 +48,11 @@ isIndConstructor :: Operator -> Type -> Bool
 isIndConstructor op t = case opTy op of
                             t1 :-> t2 -> unifyTest t t2   -- En vez de igualdad no deberia ser que sean unificables??
                             otherwise -> False
+                            
+
+
+                            
+                            
+                            
+                            
+                            

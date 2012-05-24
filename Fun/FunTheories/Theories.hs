@@ -1,8 +1,11 @@
 {-# Language OverloadedStrings #-}
-module Fun.FunTypes.Nat(
+module Fun.FunTheories.Theories(
        arithTheory
      , listTheory
      , folTheory
+     , natural
+     , list
+     , bool
      ) where
 
 import qualified Equ.Theories.Arith as EquArith
@@ -29,8 +32,6 @@ natural = fromJust $ createIndType "Natural" (TyAtom ATyNat) [EquArith.natZero] 
 
 arithOperators = [EquArith.natSum,EquArith.natProd]
 
-arithFunctions = []
-
 arithQuantifiers = EquArith.theoryQuantifiersList
 
 arithAxioms = EquTh.arithAxioms
@@ -42,10 +43,9 @@ arithTheory = Theory {
               tname = "Aritmética"
             , indType = natural
             , operators = arithOperators
-            , functions = arithFunctions
             , quantifiers = arithQuantifiers
             , axioms = arithAxioms
-            , theorems = arithTheorems
+            , theorytheorems = arithTheorems
             }
             
             
@@ -58,8 +58,6 @@ list = fromJust $ createIndType "Lista" (tyListVar "A") [EquList.listEmpty] [Equ
 listOperators = [ EquList.listIndex, EquList.listConcat, EquList.listLength
                 , EquList.listTake, EquList.listDrop]
                 
-listFunctions = []
-            
 listQuantifiers = EquList.theoryQuantifiersList
 
 listAxioms = EquTh.listAxioms
@@ -70,10 +68,9 @@ listTheory = Theory {
              tname = "Listas"
            , indType = list
            , operators = listOperators
-           , functions = listFunctions
            , quantifiers = listQuantifiers
            , axioms = listAxioms
-           , theorems = listTheorems
+           , theorytheorems = listTheorems
            }
            
            
@@ -83,8 +80,6 @@ bool :: IndType
 bool =  fromJust $ createIndType "Bool" (TyAtom ATyBool) [EquFOL.folTrue, EquFOL.folFalse] []
 
 boolOperators = EquFOL.theoryOperatorsList
-
-boolFunctions = []
 
 boolQuantifiers = EquFOL.theoryQuantifiersList
 
@@ -96,8 +91,7 @@ folTheory = Theory {
             tname = "Lógica"
           , indType = bool
           , operators = boolOperators
-          , functions = boolFunctions
           , quantifiers = boolQuantifiers
           , axioms = boolAxioms
-          , theorems = boolTheorems
+          , theorytheorems = boolTheorems
           }

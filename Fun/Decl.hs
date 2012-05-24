@@ -31,3 +31,10 @@ isPrg (If c e1 e2) = isPrg c && isPrg e1 && isPrg e2
 isPrg (Case e patterns) = isPrg e && (and $ map (\(p,e) -> isPrg p && isPrg e) patterns)
 isPrg (Paren pe) = isPrg pe
 isPrg _ = True
+
+
+
+
+
+
+
