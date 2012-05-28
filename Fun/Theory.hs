@@ -1,6 +1,8 @@
 
 module Fun.Theory where
 
+
+import Equ.PreExpr
 import Equ.Proof
 import Equ.Syntax
 import Fun.IndType
@@ -14,12 +16,12 @@ import Data.Text
    esté involucrado el tipo. -}
 data Theory = Theory {
                tname :: Text
-             , indType :: IndType
-             , operators :: [Operator] -- En esta lista no se incluye a los constructores.
+             , indType :: [IndType] 
+             , operators :: [(Operator,[Variable],PreExpr)] -- En esta lista no se incluye a los constructores.
              , quantifiers :: [Quantifier]
              , axioms :: [Axiom]
              , theorytheorems :: [Theorem]
             }
-            
+
             
             

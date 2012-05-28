@@ -5,6 +5,7 @@ import Equ.PreExpr
 import Equ.Syntax
 import Equ.Rule
 import Equ.Proof
+import Equ.Types
 import Data.Text hiding (map)
 
 
@@ -18,6 +19,7 @@ data Decl =   Spec Func [Variable] PreExpr
             | Thm Text Relation PreExpr PreExpr Proof
             | Fun Func [Variable] PreExpr -- como hacemos con el derived from...?
             | Val Variable PreExpr
+            | NewType Type [Constant] [(Operator,[Variable],PreExpr)] -- Para implementar a futuro.
             
             
 
@@ -31,10 +33,6 @@ isPrg (If c e1 e2) = isPrg c && isPrg e1 && isPrg e2
 isPrg (Case e patterns) = isPrg e && (and $ map (\(p,e) -> isPrg p && isPrg e) patterns)
 isPrg (Paren pe) = isPrg pe
 isPrg _ = True
-
-
-
-
 
 
 
