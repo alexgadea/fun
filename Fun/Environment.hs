@@ -29,7 +29,12 @@ data Environment = Environment {
                                                   -- el cual contiene los tipos basicos de Equ.
             }
             
-            
+envAddFun :: Environment -> Func -> PreExpr -> Environment
+envAddFun env f e = env {functions = M.insert f e $ functions env} 
+
+envAddVar :: Environment -> Variable -> PreExpr -> Environment
+envAddVar env v e = env {vals = M.insert v e $ vals env} 
+
 initTheorems = concatMap theorytheorems [arithTheory,listTheory,folTheory]
   
 
