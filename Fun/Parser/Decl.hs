@@ -3,25 +3,18 @@ module Fun.Parser.Decl where
 
 -- Imports de EQU.
 import Equ.Syntax(var, tRepr,Variable,VarName,FuncName,Func(..))
-import Equ.Parser(Parser',parsePreExpr,parseTyFromString)
+import Equ.Parser(Parser',parsePreExpr,parseTyFromString,rel,proof)
 import qualified Equ.PreExpr as PE ( PreExpr, PreExpr' (Var), PreExpr' (Fun)
                                    , toFocus,Focus,unParen
                                    , listOfVar,listOfFun
                                    , toExpr
                                    )
 import Equ.Types(Type, tyVarInternal)
-import Equ.Proof (validateProof, printProof)
-import Equ.Proof.Proof ( Proof'(..)
-                       , Ctx
-                       , Basic (..) 
-                       , Theorem (..)
-                       , Axiom (..)
-                       , getEnd 
+import Equ.Proof.Proof ( getEnd 
+                       , getRel
                        , getStart
-                       , beginCtx
                        , Proof)
-import Equ.Theories (theories,axiomGroup,TheoryName,createTheorem)
-import Equ.Rule hiding (rel)
+import Equ.Rule (Relation)
 
 -- Imports de Parsec.
 import Text.Parsec
@@ -31,7 +24,7 @@ import Text.Parsec.Language(emptyDef)
 
 -- Imports Data.*
 import Data.Text(Text,pack)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe,fromJust)
 import qualified Data.Map as M (empty,Map,member,insert,(!)) 
 
 -- Imports Monad.
@@ -66,7 +59,8 @@ lexer = lexer' { whiteSpace = oneOf " \t" >> return ()}
 rNames :: [String]
 rNames = [ "let", "fun", "spec"
          , "thm", "prop", "val"
-         , ":", "="
+         , ":", "=", ".", "with"
+         , "end"
          ]
 
 keyword :: String -> ParserD ()
@@ -75,8 +69,20 @@ keyword  = reserved lexer
 keywordLet :: ParserD ()
 keywordLet = keyword "let"
 
+keywordDot :: ParserD ()
+keywordDot = keyword "."
+
+keywordWith :: ParserD ()
+keywordWith = keyword "with"
+
+keywordEnd :: ParserD ()
+keywordEnd = keyword "end"
+
 whites :: ParserD ()
-whites = whiteSpace lexer 
+whites = whiteSpace lexer
+
+tryNewline :: ParserD ()
+tryNewline = try newline >> return ()
 
 -- | Calcula el tipo de una variable o funcion
 setType :: Either VarName FuncName -> PState -> (PState,Type)
@@ -140,10 +146,9 @@ updateTypeVF ename ty = getState >>= \st ->
 -- Algo raro es que la posición de la linea siempre esta un lugar mas "adelante"
 -- (Actualización) Tengo bastante avanzado en como solucionar esto y agregar
 -- ademas mucha mas informacion sobre los errores de parseo.
-parseExpr :: Maybe [Variable] -> ParserD PE.PreExpr
-parseExpr mvs = getState >>= \st ->
-            fmap (exprL $ pVarTy st) (manyTill anyChar (try (char '\n'))) >>= 
-            pass
+parseExpr :: Maybe [Variable] -> ParserD () -> ParserD PE.PreExpr
+parseExpr mvs till = getState >>= \st ->
+                     fmap (exprL $ pVarTy st) (manyTill anyChar till) >>= pass
     where
         pass :: Either ParseError PE.Focus -> ParserD PE.PreExpr
         pass ef = case ef of
@@ -215,7 +220,7 @@ parseSF cnstr mfun = parseFuncPreExpr >>= \fun ->
         parseFunWithoutType fun = do
                     let is = fromMaybe (const True) mfun
                     vs <- parseFunArgs
-                    e <- parseExpr (Just vs)
+                    e <- parseExpr (Just vs) tryNewline
                     st <- getState
                     case (is e, M.member fun $ functions $ pEnv st) of
                         (False,_) -> fail "La expresión no es un programa."
@@ -242,9 +247,50 @@ parseSpec = parseSF Spec Nothing
 parseFun :: ParserD Decl
 parseFun = parseSF Fun $ Just isPrg
 
--- | Pasea un teorema, evidentemente todavía no lo hace :D
+-- | Parser de relaciones en ParserD, parsea hasta un terminador till.
+parseRel :: ParserD () -> ParserD Relation
+parseRel till = fmap parseRel' (manyTill anyChar till) >>= pass
+    where
+        pass :: Either ParseError Relation -> ParserD Relation
+        pass er = case er of
+                    Right r -> return r
+                    Left per -> getPosition >>= \p -> 
+                                fail $ show $ flip setErrorPos per $
+                                setSourceLine (errorPos per) (sourceLine p-1)
+        parseRel' :: String -> Either ParseError Relation
+        parseRel' = runParser rel initVarTy ""
+
+-- | Parser de pruebas para parserD, parsea una prueba hasta el terminador till.
+parseProof :: ParserD () -> ParserD Proof
+parseProof till = fmap parseProof' (manyTill anyChar till) >>= pass
+    where
+        pass :: Either ParseError Proof -> ParserD Proof
+        pass ep = case ep of
+                    Right p -> return p
+                    Left per -> getPosition >>= \p -> 
+                                fail $ show $ flip setErrorPos per $
+                                setSourceLine (errorPos per) (sourceLine p-1)
+        parseProof' :: String -> Either ParseError Proof
+        parseProof' = runParser proof initVarTy ""
+
+-- | Parsea un teorema.
+-- TODO: Mejorar el informe de errores.
 parseThm :: ParserD Decl
-parseThm = undefined 
+parseThm = do
+    name <- parseName
+    ei <- parseExpr Nothing keywordDot
+    rel <- parseRel keywordDot
+    ef <- parseExpr Nothing keywordWith
+    p <- parseProof keywordEnd
+    let eip = PE.toExpr $ fromJust $ getStart p
+    let relp = fromJust $ getRel p
+    let efp = PE.toExpr $ fromJust $ getEnd p
+    case (ei == eip, rel == relp, ef == efp) of
+        (False,_,_) -> fail $ show ei ++ "!="  ++ show eip
+        (_,False,_) -> fail $ show rel ++ "!=" ++  show relp
+        (_,_,False) -> fail $ show ef ++ "!=" ++ show efp
+        _ -> return $ Thm name rel ei ef p
+           
 
 -- | Parser para declaracion de valores.
 {- | Comprobaciones al parsear:
@@ -257,7 +303,7 @@ parseVal = parseVar >>= \v -> parseVarWithoutType v <|> parseVarWithType v
     where 
         parseVarWithoutType :: Variable -> ParserD Decl
         parseVarWithoutType v = try $
-                keyword "=" >> parseExpr Nothing >>= \e ->
+                keyword "=" >> parseExpr Nothing tryNewline >>= \e ->
                 getState >>= \st -> 
                 case (isPrg e, M.member v $ vals $ pEnv st) of
                     (False,_) -> fail "La expresión no es un programa."
@@ -276,16 +322,17 @@ parseVal = parseVar >>= \v -> parseVarWithoutType v <|> parseVarWithType v
 
 -- | Parser para propiedades.
 parseProp :: ParserD Decl
-parseProp = parseName >>= \name -> parseExpr Nothing >>= 
+parseProp = parseName >>= \name -> 
+            parseExpr Nothing tryNewline >>= 
             \e -> return (Prop name e)
 
 -- | Parser de declaraciones.
 parseDecl :: ParserD Decl
-parseDecl =  parseLet "spec" parseSpec -- Ya esta.
-         <|> parseLet "prop" parseProp -- Ya esta.
+parseDecl =  parseLet "spec" parseSpec
+         <|> parseLet "prop" parseProp
          <|> parseLet "thm"  parseThm
-         <|> parseLet "fun"  parseFun -- Ya esta.
-         <|> parseLet "val"  parseVal -- Ya esta.
+         <|> parseLet "fun"  parseFun
+         <|> parseLet "val"  parseVal
 
 parseFromStringDecl :: String -> Either ParseError Decl
 parseFromStringDecl = runParser parseDecl initPState ""
