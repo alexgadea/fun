@@ -1,0 +1,33 @@
+Name:                fun
+Version:             0.1
+Synopsis:            Derivador de programas a partir de especificaciones.
+Description:         Fun es una herramienta de ayuda para el aprendizaje de
+                     la programación funcional.
+License:             GPL
+License-file:        LICENSE
+Author:              Renato Cherini, Alejandro Gadea, Emmanuel Gunther, Miguel Pagano
+Maintainer:          Miguel Pagano <pagano@famaf.unc.edu.ar>
+Build-Type:          Simple
+Cabal-Version:       >=1.2
+Tested-with:         GHC==6.10.1
+Build-type:          Simple
+Bug-reports:         https://github.com/alexgadea/fun/issues
+
+Library
+    Exposed-modules:        Fun.Theories, 
+                            Fun.Environment, 
+                            Fun.Patterns, 
+                            Fun.Theory, 
+                            Fun.IndType, 
+                            Fun.Decl, 
+                            Fun.Module, 
+                            Fun.Parser.Decl, 
+                            Fun.FunTheories.FOL, 
+                            Fun.FunTheories.Arith, 
+                            Fun.FunTheories.List
+
+    Build-depends:          base >= 4.2, text >= 0.11.1.5, 
+                            containers >= 0.4.0.0, equ >= 0.1, mtl >= 2.0.1.0,
+                            parsec >= 3.1.1
+    
+    GHC-Options:         -Odph -Wall

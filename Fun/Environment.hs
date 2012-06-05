@@ -1,7 +1,6 @@
 
 module Fun.Environment where
 
-
 import Equ.Syntax
 import Equ.PreExpr
 import Equ.Proof
@@ -11,11 +10,8 @@ import Fun.Theories
 import Fun.Theory
 import Fun.IndType
 
-
 import qualified Data.Map as M
 import Data.Text hiding (map,concatMap)
-
-
 
 data Environment = Environment {
                    functions :: M.Map Func PreExpr
@@ -35,13 +31,16 @@ envAddFun env f e = env {functions = M.insert f e $ functions env}
 envAddVar :: Environment -> Variable -> PreExpr -> Environment
 envAddVar env v e = env {vals = M.insert v e $ vals env} 
 
+initTheorems :: [Theorem]
 initTheorems = concatMap theorytheorems [arithTheory,listTheory,folTheory]
   
-
+mapIndTypes :: [(Type' TyVarName, IndType)]
 mapIndTypes = [ (TyAtom ATyNat,natural)
               , (TyAtom ATyBool,bool)
               , (TyList (tyVar "A"), list)
               ]
+
+initEnvironment :: Environment
 initEnvironment = Environment {
                     functions = M.empty
                   , specs = M.empty
@@ -50,6 +49,3 @@ initEnvironment = Environment {
                   , vals = M.empty
                   , indTypes = mapIndTypes
                 }
-                
-                
-                

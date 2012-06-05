@@ -45,6 +45,7 @@ data PState = PState { pEnv :: Environment
 
 type ParserD a = ParsecT String PState Identity a
 
+lexer :: GenTokenParser String PState Identity
 lexer = lexer' { whiteSpace = oneOf " \t" >> return ()}
     where
         lexer' :: TokenParser PState
