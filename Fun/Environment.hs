@@ -28,8 +28,14 @@ data Environment = Environment {
 envAddFun :: Environment -> Func -> PreExpr -> Environment
 envAddFun env f e = env {functions = M.insert f e $ functions env} 
 
+envAddSpec :: Environment -> Func -> PreExpr -> Environment
+envAddSpec env f e = env {specs = M.insert f e $ specs env} 
+
 envAddVar :: Environment -> Variable -> PreExpr -> Environment
 envAddVar env v e = env {vals = M.insert v e $ vals env} 
+
+envAddProp :: Environment -> Text -> PreExpr -> Environment
+envAddProp env t e = env {props = M.insert t e $ props env} 
 
 initTheorems :: [Theorem]
 initTheorems = concatMap theorytheorems [arithTheory,listTheory,folTheory]

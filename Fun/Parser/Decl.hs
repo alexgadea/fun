@@ -18,9 +18,8 @@ import Equ.Rule (Relation)
 
 -- Imports de Parsec.
 import Text.Parsec
-import Text.Parsec.Error
-import Text.Parsec.Token
-import Text.Parsec.Language(emptyDef)
+import Text.Parsec.Error(setErrorPos)
+import Text.Parsec.Token(lexeme)
 
 -- Imports Data.*
 import Data.Text(Text,pack)
@@ -33,57 +32,11 @@ import Control.Applicative ((<$>),(<*>))
 
 -- Imports Fun.
 import Fun.Decl
-import Fun.Environment
-
-type EitherName = Either VarName FuncName
-
-type VarTy = (Int,M.Map EitherName Type)
-
-data PState = PState { pEnv :: Environment
-                     , pVarTy :: VarTy
-                     }
-
-type ParserD a = ParsecT String PState Identity a
-
-lexer :: GenTokenParser String PState Identity
-lexer = lexer' { whiteSpace = oneOf " \t" >> return ()}
-    where
-        lexer' :: TokenParser PState
-        lexer' = makeTokenParser $ 
-                    emptyDef { reservedNames = rNames
-                             , identStart  = alphaNum <|> char '_'
-                             , identLetter = alphaNum <|> char '_'
-                             , caseSensitive = True
-                             }
-
--- | Nombres reservados de las declaraciones. 
-rNames :: [String]
-rNames = [ "let", "fun", "spec"
-         , "thm", "prop", "val"
-         , ":", "=", ".", "with"
-         , "end"
-         ]
-
-keyword :: String -> ParserD ()
-keyword  = reserved lexer
-
-keywordLet :: ParserD ()
-keywordLet = keyword "let"
-
-keywordDot :: ParserD ()
-keywordDot = keyword "."
-
-keywordWith :: ParserD ()
-keywordWith = keyword "with"
-
-keywordEnd :: ParserD ()
-keywordEnd = keyword "end"
-
-whites :: ParserD ()
-whites = whiteSpace lexer
-
-tryNewline :: ParserD ()
-tryNewline = try newline >> return ()
+import Fun.Environment( Environment
+                      , vals, functions, props, specs
+                      , envAddFun, envAddVar, envAddProp, envAddSpec
+                      , initEnvironment)
+import Fun.Parser.Internal
 
 -- | Calcula el tipo de una variable o funcion
 setType :: Either VarName FuncName -> PState -> (PState,Type)
@@ -183,7 +136,12 @@ parseType' = fmap parseTyFromString (manyTill anyChar (try (char '\n'))) >>= pas
 
 -- | Parsea prefijos de declaraciones y continua con p.
 parseLet :: String -> ParserD Decl -> ParserD Decl
-parseLet s p = try (keywordLet >> keyword s >> p)
+parseLet s parse = try $ do many newline
+                            keywordLet
+                            keyword s
+                            decl <- parse
+                            many newline
+                            return decl
 
 -- | Parsea nombres que comienzan con minuscula.
 parseName :: ParserD Text
@@ -213,8 +171,10 @@ parseFuncPreExpr = try $ lexeme lexer ((:) <$> upper <*> many alphaNum) >>=
         que este entre las variables de los argumentos.
 -}
 parseSF ::  (Func -> [Variable] -> PE.PreExpr -> Decl) -> 
+            (Environment -> Func -> PE.PreExpr -> Environment) ->
+            (Environment -> M.Map Func PE.PreExpr) ->
             Maybe (PE.PreExpr -> Bool) -> ParserD Decl
-parseSF cnstr mfun = parseFuncPreExpr >>= \fun -> 
+parseSF cnstr envAdd sfs mfun = parseFuncPreExpr >>= \fun -> 
             parseFunWithType fun <|> parseFunWithoutType fun
     where
         parseFunWithoutType :: Func -> ParserD Decl
@@ -223,10 +183,10 @@ parseSF cnstr mfun = parseFuncPreExpr >>= \fun ->
                     vs <- parseFunArgs
                     e <- parseExpr (Just vs) tryNewline
                     st <- getState
-                    case (is e, M.member fun $ functions $ pEnv st) of
+                    case (is e, M.member fun $ sfs $ pEnv st) of
                         (False,_) -> fail "La expresión no es un programa."
                         (_,True) -> fail "Doble declaración de una función."
-                        _ -> putState (st {pEnv = envAddFun (pEnv st) fun e}) >> 
+                        _ -> putState (st {pEnv = envAdd (pEnv st) fun e}) >> 
                                 return (cnstr fun vs e)
         parseFunWithType :: Func -> ParserD Decl
         parseFunWithType fun = try $
@@ -242,11 +202,11 @@ parseSF cnstr mfun = parseFuncPreExpr >>= \fun ->
 
 -- | Parsea una especificación.
 parseSpec :: ParserD Decl
-parseSpec = parseSF Spec Nothing
+parseSpec = parseSF Spec envAddSpec specs Nothing
 
 -- | Parsea una función.
 parseFun :: ParserD Decl
-parseFun = parseSF Fun $ Just isPrg
+parseFun = parseSF Fun envAddFun functions $ Just isPrg
 
 -- | Parser de relaciones en ParserD, parsea hasta un terminador till.
 parseRel :: ParserD () -> ParserD Relation
@@ -323,9 +283,13 @@ parseVal = parseVar >>= \v -> parseVarWithoutType v <|> parseVarWithType v
 
 -- | Parser para propiedades.
 parseProp :: ParserD Decl
-parseProp = parseName >>= \name -> 
-            parseExpr Nothing tryNewline >>= 
-            \e -> return (Prop name e)
+parseProp = parseName >>= \name ->
+            getState >>= \st -> 
+            if M.member name $ props $ pEnv st
+                then fail "Doble declaración de una propiedad."
+                else parseExpr Nothing tryNewline >>= \e -> 
+                     putState (st {pEnv = envAddProp (pEnv st) name e}) >> 
+                     return (Prop name e)
 
 -- | Parser de declaraciones.
 parseDecl :: ParserD Decl

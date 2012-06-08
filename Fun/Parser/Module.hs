@@ -1,0 +1,28 @@
+-- | Este modulo es el parser de modulos de fun.
+module Fun.Parser.Module where
+
+import System.Environment
+
+-- Imports de parsec.
+import Text.Parsec
+
+-- Imports fun.
+import Fun.Parser.Internal
+import Fun.Parser.Import
+import Fun.Parser.Decl
+import Fun.Module
+
+-- | Parser de modulos de fun.
+parseModule :: ParserD Module
+parseModule = do
+            keywordModule
+            mName <- parseModuleName
+            (imports,decl) <- manyTillWithEnd parseImport parseDecl
+            decls <- manyTill parseDecl eof
+            return $ Module mName imports (decl:decls)
+
+parseFromStringModule :: String -> Either ParseError Module
+parseFromStringModule = runParser parseModule initPState ""
+
+parseFromFileModule :: FilePath -> IO ()
+parseFromFileModule fp = readFile fp >>= print . parseFromStringModule

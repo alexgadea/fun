@@ -11,7 +11,7 @@ data Module = Module {
               , imports :: [Import]
               , decls   :: [Decl]
             }
+    deriving Show
 
-data Import = Import Module
-
-
+data Import = Import ModName
+    deriving Show
