@@ -12,7 +12,8 @@ import Equ.PreExpr
 import Equ.Types
 import Equ.Syntax
 
-import Fun.IndType
+import Equ.IndType
+import Equ.IndTypes(list)
 import Fun.Theory
 import Fun.FunTheories.Arith
 
@@ -20,10 +21,6 @@ import Data.Maybe(fromJust)
 import Data.Text hiding (map)
 
 
-            
-            
-list :: IndType
-list = fromJust $ createIndType "Lista" (tyListVar "A") [EquList.listEmpty] [EquList.listApp]
 
 varN = var "n" (TyAtom ATyNat)
 varT = var "t" (TyAtom ATyNat)

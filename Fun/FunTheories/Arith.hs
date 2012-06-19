@@ -11,7 +11,8 @@ import Equ.PreExpr
 import Equ.Types
 import Equ.Syntax
 
-import Fun.IndType
+import Equ.IndType
+import Equ.IndTypes(natural)
 import Fun.Theory
 
 import Data.Maybe(fromJust)
@@ -20,11 +21,6 @@ import Data.Text hiding (map)
 
 
 {- ARITMETICA -}
-
--- Los tipos inductivos los construimos nosotros programadores, pongo fromJust
--- para que si cometemos un error al crear un tipo inductivo, salte a la vista.
-natural :: IndType
-natural = fromJust $ createIndType "Natural" (TyAtom ATyNat) [EquArith.natZero] [EquArith.natSucc]
 
 varN = var "n" (TyAtom ATyNat)
 varM = var "m" (TyAtom ATyNat)

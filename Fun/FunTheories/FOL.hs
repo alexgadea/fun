@@ -11,6 +11,8 @@ import Equ.PreExpr
 import Equ.Types
 import Equ.Syntax
 
+import Equ.IndType
+import Equ.IndTypes(bool)
 import Fun.IndType
 import Fun.Theory
 
@@ -20,9 +22,7 @@ import Data.Text hiding (map)
 
 
 {- Lógica -}
-            
-bool :: IndType
-bool =  fromJust $ createIndType "Bool" (TyAtom ATyBool) [EquFOL.folTrue, EquFOL.folFalse] []
+
 
 boolOperators = EquFOL.theoryOperatorsList
 

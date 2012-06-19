@@ -5,7 +5,7 @@ module Fun.Theory where
 import Equ.PreExpr
 import Equ.Proof
 import Equ.Syntax
-import Fun.IndType
+import Equ.IndType
 
 import Data.Text
 

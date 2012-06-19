@@ -8,7 +8,7 @@ import Equ.Types
 
 import Fun.Theories
 import Fun.Theory
-import Fun.IndType
+import Equ.IndType
 
 import qualified Data.Map as M
 import Data.Text hiding (map,concatMap)
