@@ -13,7 +13,6 @@ import Equ.Syntax
 
 import Equ.IndType
 import Equ.IndTypes(bool)
-import Fun.IndType
 import Fun.Theory
 
 import Data.Maybe(fromJust)
