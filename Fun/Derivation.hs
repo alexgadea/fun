@@ -1,5 +1,11 @@
 
-module Fun.Derivation where
+module Fun.Derivation (
+      Derivation(..)
+    , module Fun.Derivation.Monad
+    , module Fun.Derivation.Error
+    , validateDerivation
+    )
+    where
 
 import Fun.Decl
 import Fun.Derivation.Derivation
