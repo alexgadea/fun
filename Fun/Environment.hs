@@ -1,57 +1,33 @@
-
 module Fun.Environment where
 
-import Equ.Syntax
-import Equ.PreExpr
-import Equ.Proof
-import Equ.Types
+import Fun.Module
 
-import Fun.Theories
-import Fun.Theory
-import Equ.IndType
+-- | Environment es el conjunto de módulos que se tienen cargados en un momento dado
+--   en Fun. Cada vez que se hace un import desde un módulo, debe referirse a un
+--   módulo que se encuentre en el environment.
+type Environment = [Module]
 
-import qualified Data.Map as M
-import Data.Text hiding (map,concatMap)
+-- | Chequea que un modulo sea correcto:
+{-   No hay dobles definiciones de funciones.
+     Los teoremas estén definidos.
+     
+checkModule :: Module -> Environment -> Either ModuleError ()
+checkModule m env = 
 
-data Environment = Environment {
-                   functions :: M.Map Func PreExpr
-                 , specs     :: M.Map Func PreExpr
-                 , theorems  :: [Theorem]
-                 , props     :: M.Map Text PreExpr
-                 , vals      :: M.Map Variable PreExpr
-                 , indTypes  :: [(Type,IndType)]  -- Map entre cada tipo de Equ y un IndType. No puedo usar Map porque Type no es instance of Ord.
-                                                  -- Si luego extendemos para declarar tipos, este campo del environment va agregando cada uno de
-                                                  -- los nuevos tipos declarados. Por ahora usaremos solo el valor inicial que le pasamos,
-                                                  -- el cual contiene los tipos basicos de Equ.
-            }
-            
-envAddFun :: Environment -> Func -> PreExpr -> Environment
-envAddFun env f e = env {functions = M.insert f e $ functions env} 
+   -}
 
-envAddSpec :: Environment -> Func -> PreExpr -> Environment
-envAddSpec env f e = env {specs = M.insert f e $ specs env} 
 
-envAddVar :: Environment -> Variable -> PreExpr -> Environment
-envAddVar env v e = env {vals = M.insert v e $ vals env} 
 
-envAddProp :: Environment -> Text -> PreExpr -> Environment
-envAddProp env t e = env {props = M.insert t e $ props env} 
 
-initTheorems :: [Theorem]
-initTheorems = concatMap theorytheorems [arithTheory,listTheory,folTheory]
-  
-mapIndTypes :: [(Type' TyVarName, IndType)]
-mapIndTypes = [ (TyAtom ATyNat,natural)
-              , (TyAtom ATyBool,bool)
-              , (TyList (tyVar "A"), list)
-              ]
 
-initEnvironment :: Environment
-initEnvironment = Environment {
-                    functions = M.empty
-                  , specs = M.empty
-                  , theorems = initTheorems
-                  , props = M.empty
-                  , vals = M.empty
-                  , indTypes = mapIndTypes
-                }
+
+
+
+
+
+
+
+
+
+
+

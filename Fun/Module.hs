@@ -2,16 +2,26 @@
 module Fun.Module where
 
 import Fun.Decl
+import Fun.Declarations
+import Fun.Derivation
 import Data.Text
 
 type ModName = Text
 
 data Module = Module {
-                modName :: ModName 
+                modName :: ModName
               , imports :: [Import]
-              , decls   :: [Decl]
+              , decls   :: Declarations
+              , derivations :: [Derivation]
             }
-    deriving Show
 
 data Import = Import ModName
     deriving Show
+
+createDerivations :: Declarations -> [Derivation]
+createDerivations _ = []
+    
+    
+    
+    
+    

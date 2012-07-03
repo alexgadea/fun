@@ -6,21 +6,59 @@ import Equ.Syntax
 import Equ.Rule
 import Equ.Proof
 import Equ.Types
+import Equ.Expr
 import Data.Text hiding (map)
 
 
+-- | Declaraciones en Fun
 
-{- Decl representa declaraciones en Fun. Una especificacion sera una pre-expresión
-   en funcion de algunas teorias.
-   Una funcion estará definida por una expresión que es ejecutable. No todas las expresiones
-   cumplen esta propiedad, por lo que damos un predicado al respecto. -}
-data Decl = Spec Func [Variable] PE.PreExpr
-          | Prop Text PE.PreExpr
-          | Thm Text Relation PE.PreExpr PE.PreExpr Proof
-          | Fun Func [Variable] PE.PreExpr -- como hacemos con el derived from...?
-          | Val Variable PE.PreExpr
-          | NewType Type [Constant] [(Operator,[Variable],PE.PreExpr)] -- Para implementar a futuro.
-        deriving Show
+data SpecDecl = Spec Func [Variable] PE.PreExpr
+    deriving (Eq,Show)
+
+data PropDecl = Prop Text PE.PreExpr
+    deriving (Eq,Show)
+
+data ThmDecl = Thm Theorem
+    deriving (Eq,Show)
+
+data FunDecl = Fun Func [Variable] PE.PreExpr (Maybe ThmDecl) -- Puede tener la derivación o no.
+    deriving (Eq,Show)
+
+data ValDecl = Val Variable PE.PreExpr
+    deriving (Eq,Show)
+
+data TypeDecl = NewType Type [Constant] [(Operator,[Variable],PE.PreExpr)] -- Para implementar a futuro.
+    deriving (Eq,Show)
+
+
+class Decl a where
+    getFuncDecl :: a -> Maybe Func
+    getExprDecl :: a -> Maybe PE.PreExpr
+
+instance Decl SpecDecl where
+    getFuncDecl (Spec f _ _) = Just f
+    getExprDecl (Spec _ _ e) = Just e
+    
+instance Decl PropDecl where
+    getFuncDecl _ = Nothing
+    getExprDecl (Prop _ e) = Just e
+    
+instance Decl ThmDecl where
+    getFuncDecl _ = Nothing
+    getExprDecl (Thm t) = let (Expr p) = thExpr t in
+                              Just p
+    
+instance Decl FunDecl where
+    getFuncDecl (Fun f _ _ _) = Just f
+    getExprDecl (Fun _ _ p _) = Just p
+    
+instance Decl ValDecl where
+    getFuncDecl _ = Nothing
+    getExprDecl (Val _ p) = Just p
+    
+instance Decl TypeDecl where
+    getFuncDecl _ = Nothing
+    getExprDecl _ = Nothing
 
 isPrg :: PE.PreExpr -> Bool
 isPrg (PE.Quant _ _ _ _) = False
@@ -33,16 +71,5 @@ isPrg (PE.Case e patterns) = isPrg e && (and $ map (\(p,e) -> isPrg p && isPrg e
 isPrg (PE.Paren pe) = isPrg pe
 isPrg _ = True
 
-
-getFuncDecl :: Decl -> Maybe Func
-getFuncDecl (Spec f _ _) = Just f
-getFuncDecl (Fun f _ _) = Just f
-getFuncDecl _ = Nothing
-
-getExprDecl :: Decl -> Maybe PE.PreExpr
-getExprDecl (Spec _ _ p) = Just p
-getExprDecl (Prop _ p) = Just p
-getExprDecl (Fun _ _ p) = Just p
-getExprDecl (Val _ p) = Just p
 
 

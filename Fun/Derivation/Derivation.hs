@@ -11,7 +11,7 @@ import Data.Text hiding (map)
 -- | Una derivación contiene una especificación, un programa y la prueba
 --   de que ambos son equivalentes.
 data Derivation = Derivation {
-                    espec :: Decl
-                  , prog :: Decl
+                    espec :: SpecDecl
+                  , prog :: FunDecl
                   , proof :: Proof
                 }
