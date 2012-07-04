@@ -14,6 +14,7 @@ data Module = Module {
               , decls   :: Declarations
               , derivations :: [Derivation]
             }
+    deriving Show
 
 data Import = Import ModName
     deriving Show

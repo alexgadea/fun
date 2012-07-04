@@ -25,6 +25,12 @@ data Declarations = Declarations {
                                            -- el cual contiene los tipos basicos de Equ.
             }
 
+instance Show Declarations where
+    show decls = "Funs" ++ show (functions decls) ++ ", " ++
+                 "Specs" ++ show (specs decls) ++ ", " ++
+                 "Thms" ++ show (theorems decls) ++ ", " ++
+                 "Props" ++ show (props decls) ++ ", " ++
+                 "Vals" ++ show (vals decls)
             
 envAddFun :: Declarations -> FunDecl -> Declarations
 envAddFun env f = env {functions = f:(functions env)}
@@ -34,6 +40,9 @@ envAddSpec env s = env {specs = s:(specs env)}
 
 envAddVal :: Declarations -> ValDecl -> Declarations
 envAddVal env v = env {vals = v:(vals env)}
+
+envAddTheorem :: Declarations -> ThmDecl -> Declarations
+envAddTheorem env p = env {theorems = p:(theorems env)} 
 
 envAddProp :: Declarations -> PropDecl -> Declarations
 envAddProp env p = env {props = p:(props env)} 

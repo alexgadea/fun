@@ -21,7 +21,7 @@ data PropDecl = Prop Text PE.PreExpr
 data ThmDecl = Thm Theorem
     deriving (Eq,Show)
 
-data FunDecl = Fun Func [Variable] PE.PreExpr (Maybe ThmDecl) -- Puede tener la derivación o no.
+data FunDecl = Fun Func [Variable] PE.PreExpr (Maybe Text) -- Puede tener la derivación o no.
     deriving (Eq,Show)
 
 data ValDecl = Val Variable PE.PreExpr

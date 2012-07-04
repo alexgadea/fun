@@ -15,24 +15,24 @@ import qualified Data.Map as M (Map)
 -- Imports Equ.
 import Equ.Types(Type)
 import Equ.Syntax(VarName,FuncName)
+import qualified Equ.Parser as EquP (PProofState, PExprState)
 
 -- Imports Fun.
-import Fun.Environment
+import Fun.Declarations
 
 type EitherName = Either VarName FuncName
 
-type VarTy = (Int,M.Map EitherName Type)
+data PDeclState = PDeclState { pDecls :: Declarations
+                             , pVarTy :: EquP.PExprState
+                             , pProofs :: EquP.PProofState
+                             }
 
-data PState = PState { pEnv :: Environment
-                     , pVarTy :: VarTy
-                     }
+type ParserD a = ParsecT String PDeclState Identity a
 
-type ParserD a = ParsecT String PState Identity a
-
-lexer :: GenTokenParser String PState Identity
+lexer :: GenTokenParser String PDeclState Identity
 lexer = lexer' { whiteSpace = oneOf " \t" >> return ()}
     where
-        lexer' :: TokenParser PState
+        lexer' :: TokenParser PDeclState
         lexer' = makeTokenParser $ 
                     emptyDef { reservedNames = rNames
                              , identStart  = alphaNum <|> char '_'
@@ -46,6 +46,7 @@ rNames = [ "let", "fun", "spec"
          , "thm", "prop", "val"
          , ":", "=", ".", "with"
          , "end", "import", "module"
+         , "deriving", "from"
          ]
 
 keyword :: String -> ParserD ()
@@ -56,6 +57,12 @@ keywordModule = keyword "module"
 
 keywordImport :: ParserD ()
 keywordImport = keyword "import"
+
+keywordDeriving :: ParserD ()
+keywordDeriving = keyword "deriving"
+
+keywordFrom :: ParserD ()
+keywordFrom = keyword "from"
 
 keywordLet :: ParserD ()
 keywordLet = keyword "let"
@@ -68,6 +75,9 @@ keywordWith = keyword "with"
 
 keywordEnd :: ParserD ()
 keywordEnd = keyword "end"
+
+keywordDerivingFrom :: ParserD ()
+keywordDerivingFrom = keywordDeriving >> keywordFrom
 
 whites :: ParserD ()
 whites = whiteSpace lexer

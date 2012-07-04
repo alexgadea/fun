@@ -17,9 +17,10 @@ parseModule :: ParserD Module
 parseModule = do
             keywordModule
             mName <- parseModuleName
-            (imports,decl) <- manyTillWithEnd parseImport parseDecl
-            decls <- manyTill parseDecl eof
-            return $ Module mName imports (decl:decls)
+            imports <- manyTill parseImport parseDecl
+            manyTill parseDecl eof
+            st <- getState
+            return $ Module mName imports (pDecls st) []
 
 parseFromStringModule :: String -> Either ParseError Module
 parseFromStringModule = runParser parseModule initPState ""

@@ -3,7 +3,14 @@ module Fun.Parser.Decl where
 
 -- Imports de EQU.
 import Equ.Syntax(var, tRepr,Variable,VarName,FuncName,Func(..))
-import Equ.Parser(Parser',parsePreExpr,parseTyFromString,rel,proof)
+import qualified Equ.Parser as EquP ( Parser'
+                                    , parsePreExpr,parseTyFromString
+                                    , rel, proof
+                                    , initPProofState
+                                    , initPExprState
+                                    , PProofState 
+                                    , PExprState
+                                    )
 import qualified Equ.PreExpr as PE ( PreExpr, PreExpr' (Var), PreExpr' (Fun)
                                    , toFocus,Focus,unParen
                                    , listOfVar,listOfFun
@@ -15,6 +22,7 @@ import Equ.Proof.Proof ( getEnd
                        , getStart
                        , Proof)
 import Equ.Rule (Relation)
+import Equ.Theories(createTheorem)
 
 -- Imports de Parsec.
 import Text.Parsec
@@ -32,14 +40,20 @@ import Control.Applicative ((<$>),(<*>))
 
 -- Imports Fun.
 import Fun.Decl
-import Fun.Environment( Environment
+import Fun.Declarations( Declarations
                       , vals, functions, props, specs
-                      , envAddFun, envAddVar, envAddProp, envAddSpec
-                      , initEnvironment)
+                      , envAddFun, envAddVal, envAddProp
+                      , envAddSpec, envAddTheorem
+                      , initDeclarations)
 import Fun.Parser.Internal
 
+-- Tipos para unificar la función de parseo para funciones y especificaciones.
+type S = (Func -> [Variable] -> PE.PreExpr -> SpecDecl)
+type F = (Func -> [Variable] -> PE.PreExpr -> Maybe Text -> FunDecl)
+type UnifySF = Either S F
+
 -- | Calcula el tipo de una variable o funcion
-setType :: Either VarName FuncName -> PState -> (PState,Type)
+setType :: Either VarName FuncName -> PDeclState -> (PDeclState,Type)
 setType name st = 
         if name `M.member` maps
             then (st, maps M.! name)
@@ -50,29 +64,6 @@ setType name st =
         n :: Int
         n = fst $ pVarTy st
         newvar = tyVarInternal n
-
--- | Checkea la definición previa de variables y funciones para un focus.
--- TODO: Acá se puede hacer bastante para informar los errores.
-checkPrevDef :: PE.Focus -> Maybe [Variable] -> ParserD ()
-checkPrevDef f mvs = do
-                checkPrevDefVar
-                checkPrevDefFun
-    where
-        checkPrevDefVar :: ParserD ()
-        checkPrevDefVar = do
-            st <- getState
-            let valsEnv = vals $ pEnv st
-            let vs = maybe (const True) (flip elem) mvs
-            mapM_ (\f@(PE.Var v,_) -> unless (M.member v valsEnv || vs v) $
-                    fail $ "Variable " ++ show f ++ " sin declarar.") 
-                    (PE.listOfVar f)
-        checkPrevDefFun :: ParserD ()
-        checkPrevDefFun = do
-            st <- getState
-            let funcsEnv = functions $ pEnv st
-            mapM_ (\f@(PE.Fun fun,_) -> unless (M.member fun funcsEnv) $
-                    fail $ "Función " ++ show f ++ " sin declarar.")
-                    (PE.listOfFun f)
 
 -- | Actualiza el tipo de una variable.
 updateTypeVar :: EitherName -> Type -> ParserD ()
@@ -87,17 +78,16 @@ updateTypeVF :: EitherName -> Type -> ParserD ()
 updateTypeVF ename ty = getState >>= \st -> 
                        putState (st {pVarTy = (n st, ins st ename ty)})
     where
-        n :: PState -> Int
+        n :: PDeclState -> Int
         n = fst . pVarTy
-        maps :: PState -> M.Map EitherName Type
+        maps :: PDeclState-> M.Map EitherName Type
         maps = snd . pVarTy
-        ins :: PState -> EitherName -> Type -> M.Map EitherName Type
+        ins :: PDeclState -> EitherName -> Type -> M.Map EitherName Type
         ins st ename ty = M.insert ename ty (maps st)
 
 -- | Uso del parser de una expresión definido en 'Equ.Parser.Expr'.
 -- TODO Ale: No esta bonito como manejamos el pasaje de errores con pass
 -- ademas pasa que tenemos que re-acomodar la posición del error.
--- Algo raro es que la posición de la linea siempre esta un lugar mas "adelante"
 -- (Actualización) Tengo bastante avanzado en como solucionar esto y agregar
 -- ademas mucha mas informacion sobre los errores de parseo.
 parseExpr :: Maybe [Variable] -> ParserD () -> ParserD PE.PreExpr
@@ -106,13 +96,13 @@ parseExpr mvs till = getState >>= \st ->
     where
         pass :: Either ParseError PE.Focus -> ParserD PE.PreExpr
         pass ef = case ef of
-                    Right f -> checkPrevDef f mvs >> return (PE.toExpr f)
+                    Right f -> return (PE.toExpr f)
                     Left per -> getPosition >>= \p -> 
                                 fail $ show $ flip setErrorPos per $
                                 setSourceLine (errorPos per) (sourceLine p-1)
-        exprL' :: Parser' PE.Focus
-        exprL' = fmap (PE.toFocus . PE.unParen) (spaces >> parsePreExpr)
-        exprL :: VarTy -> String -> Either ParseError PE.Focus
+        exprL' :: EquP.Parser' PE.Focus
+        exprL' = fmap (PE.toFocus . PE.unParen) (spaces >> EquP.parsePreExpr)
+        exprL :: EquP.PExprState -> String -> Either ParseError PE.Focus
         exprL vt = runParser exprL' vt ""
 
 -- | Parsea el tipo de una función.
@@ -125,7 +115,8 @@ parseVarType = parseType'
 
 -- | Parser general de tipos.
 parseType' :: ParserD Type
-parseType' = fmap parseTyFromString (manyTill anyChar (try (char '\n'))) >>= pass
+parseType' = fmap EquP.parseTyFromString (manyTill anyChar (try (char '\n'))) 
+             >>= pass
     where
         pass :: Either ParseError Type -> ParserD Type
         pass ef = case ef of
@@ -135,13 +126,13 @@ parseType' = fmap parseTyFromString (manyTill anyChar (try (char '\n'))) >>= pas
                                 setSourceLine (errorPos per) (sourceLine p-1)
 
 -- | Parsea prefijos de declaraciones y continua con p.
-parseLet :: String -> ParserD Decl -> ParserD Decl
+parseLet :: String -> ParserD () -> ParserD ()
 parseLet s parse = try $ do many newline
                             keywordLet
                             keyword s
-                            decl <- parse
+                            parse
                             many newline
-                            return decl
+                            return ()
 
 -- | Parsea nombres que comienzan con minuscula.
 parseName :: ParserD Text
@@ -170,47 +161,58 @@ parseFuncPreExpr = try $ lexeme lexer ((:) <$> upper <*> many alphaNum) >>=
         func/spec deben estar declaradas antes, o para el caso de las variables
         que este entre las variables de los argumentos.
 -}
-parseSF ::  (Func -> [Variable] -> PE.PreExpr -> Decl) -> 
-            (Environment -> Func -> PE.PreExpr -> Environment) ->
-            (Environment -> M.Map Func PE.PreExpr) ->
-            Maybe (PE.PreExpr -> Bool) -> ParserD Decl
-parseSF cnstr envAdd sfs mfun = parseFuncPreExpr >>= \fun -> 
+parseSF :: UnifySF -> ParserD ()
+parseSF ecnstr = parseFuncPreExpr >>= \fun -> 
             parseFunWithType fun <|> parseFunWithoutType fun
     where
-        parseFunWithoutType :: Func -> ParserD Decl
+        parseFunWithoutType :: Func -> ParserD ()
         parseFunWithoutType fun = do
-                    let is = fromMaybe (const True) mfun
-                    vs <- parseFunArgs
-                    e <- parseExpr (Just vs) tryNewline
-                    st <- getState
-                    case (is e, M.member fun $ sfs $ pEnv st) of
-                        (False,_) -> fail "La expresión no es un programa."
-                        (_,True) -> fail "Doble declaración de una función."
-                        _ -> putState (st {pEnv = envAdd (pEnv st) fun e}) >> 
-                                return (cnstr fun vs e)
-        parseFunWithType :: Func -> ParserD Decl
+            vs <- parseFunArgs
+            case (ecnstr) of
+                Left cnstr -> parseS fun cnstr vs
+                Right cnstr -> parseF fun cnstr vs
+        parseFunWithType :: Func -> ParserD ()
         parseFunWithType fun = try $
-                    keyword ":" >>
-                    parseFunType >>= \ty -> 
-                    updateTypeFun (Right $ tRepr fun) ty >>
-                    parseFuncPreExpr >>= \fun' ->
-                    if fun /= fun' 
-                        then fail (show fun ++ " != " ++ show fun') 
-                        else parseFunWithoutType fun'
+                keyword ":" >>
+                parseFunType >>= \ty -> 
+                updateTypeFun (Right $ tRepr fun) ty >>
+                parseFuncPreExpr >>= \fun' ->
+                if fun /= fun' 
+                    then fail (show fun ++ " != " ++ show fun') 
+                    else parseFunWithoutType fun'
+        parseF :: Func -> F -> [Variable] -> ParserD ()
+        parseF fun cnstr vs = do
+            e <- parseExpr (Just vs) tryNewline
+            st <- getState
+            case isPrg e of
+                False -> fail "La expresión no es un programa."
+                _ -> do
+                    mname <- (parseTheoName <|> return Nothing)
+                    putState (st {pDecls = envAddFun (pDecls st) 
+                                                     (cnstr fun vs e mname)}) 
+        parseTheoName :: ParserD (Maybe Text)
+        parseTheoName = keywordDerivingFrom >> parseName >>= return . Just
+        parseS :: Func -> S -> [Variable] -> ParserD ()
+        parseS fun cnstr vs = do
+            e <- parseExpr (Just vs) tryNewline
+            st <- getState
+            putState (st {pDecls = envAddSpec (pDecls st) (cnstr fun vs e)})
         parseFunArgs :: ParserD [Variable]
         parseFunArgs = manyTill parseVar (try $ string "=")
 
 -- | Parsea una especificación.
-parseSpec :: ParserD Decl
-parseSpec = parseSF Spec envAddSpec specs Nothing
+parseSpec :: ParserD ()
+parseSpec = parseSF (Left Spec)
 
 -- | Parsea una función.
-parseFun :: ParserD Decl
-parseFun = parseSF Fun envAddFun functions $ Just isPrg
+parseFun :: ParserD ()
+parseFun = parseSF (Right Fun)
 
 -- | Parser de relaciones en ParserD, parsea hasta un terminador till.
 parseRel :: ParserD () -> ParserD Relation
-parseRel till = fmap parseRel' (manyTill anyChar till) >>= pass
+parseRel till = do
+                st <- getState
+                fmap (parseRel' (pProofs st)) (manyTill anyChar till) >>= pass
     where
         pass :: Either ParseError Relation -> ParserD Relation
         pass er = case er of
@@ -218,12 +220,15 @@ parseRel till = fmap parseRel' (manyTill anyChar till) >>= pass
                     Left per -> getPosition >>= \p -> 
                                 fail $ show $ flip setErrorPos per $
                                 setSourceLine (errorPos per) (sourceLine p-1)
-        parseRel' :: String -> Either ParseError Relation
-        parseRel' = runParser rel initVarTy ""
+        parseRel' :: EquP.PProofState -> String -> Either ParseError Relation
+        parseRel' pps s = runParser EquP.rel pps "" s
 
 -- | Parser de pruebas para parserD, parsea una prueba hasta el terminador till.
 parseProof :: ParserD () -> ParserD Proof
-parseProof till = fmap parseProof' (manyTill anyChar till) >>= pass
+parseProof till = do 
+                st <- getState
+                fmap (parseProof' (pProofs st)) 
+                     (manyTill anyChar till) >>= pass
     where
         pass :: Either ParseError Proof -> ParserD Proof
         pass ep = case ep of
@@ -231,27 +236,19 @@ parseProof till = fmap parseProof' (manyTill anyChar till) >>= pass
                     Left per -> getPosition >>= \p -> 
                                 fail $ show $ flip setErrorPos per $
                                 setSourceLine (errorPos per) (sourceLine p-1)
-        parseProof' :: String -> Either ParseError Proof
-        parseProof' = runParser proof initVarTy ""
+        parseProof' :: EquP.PProofState -> String -> Either ParseError Proof
+        parseProof' pps s = runParser (EquP.proof Nothing True) pps "" s
 
 -- | Parsea un teorema.
 -- TODO: Mejorar el informe de errores.
-parseThm :: ParserD Decl
+parseThm :: ParserD ()
 parseThm = do
     name <- parseName
-    ei <- parseExpr Nothing keywordDot
-    rel <- parseRel keywordDot
-    ef <- parseExpr Nothing keywordWith
-    p <- parseProof keywordEnd
-    let eip = PE.toExpr $ fromJust $ getStart p
-    let relp = fromJust $ getRel p
-    let efp = PE.toExpr $ fromJust $ getEnd p
-    case (ei == eip, rel == relp, ef == efp) of
-        (False,_,_) -> fail $ show ei ++ "!="  ++ show eip
-        (_,False,_) -> fail $ show rel ++ "!=" ++  show relp
-        (_,_,False) -> fail $ show ef ++ "!=" ++ show efp
-        _ -> return $ Thm name rel ei ef p
-           
+    (whites >> many (newline))
+    p <- parseProof (try $ keywordEnd >> keyword "thm")
+    st <- getState
+    let declThm = Thm $ createTheorem name p
+    putState (st {pDecls = envAddTheorem (pDecls st) declThm})
 
 -- | Parser para declaracion de valores.
 {- | Comprobaciones al parsear:
@@ -259,19 +256,15 @@ parseThm = do
     2. Las variables y funciones que esten en la expresión relacionada con la 
         func/spec deben estar declaradas antes.
 -}
-parseVal :: ParserD Decl
+parseVal :: ParserD ()
 parseVal = parseVar >>= \v -> parseVarWithoutType v <|> parseVarWithType v
     where 
-        parseVarWithoutType :: Variable -> ParserD Decl
+        parseVarWithoutType :: Variable -> ParserD ()
         parseVarWithoutType v = try $
                 keyword "=" >> parseExpr Nothing tryNewline >>= \e ->
                 getState >>= \st -> 
-                case (isPrg e, M.member v $ vals $ pEnv st) of
-                    (False,_) -> fail "La expresión no es un programa."
-                    (_,True) -> fail "Doble declaración de una variable."
-                    _ -> putState (st {pEnv = envAddVar (pEnv st) v e}) >> 
-                        return (Val v e)
-        parseVarWithType :: Variable -> ParserD Decl
+                putState (st {pDecls = envAddVal (pDecls st) (Val v e)})
+        parseVarWithType :: Variable -> ParserD ()
         parseVarWithType v = try $
                     keyword ":" >>
                     parseFunType >>= \ty -> 
@@ -282,32 +275,27 @@ parseVal = parseVar >>= \v -> parseVarWithoutType v <|> parseVarWithType v
                         else parseVarWithoutType (var (tRepr v) ty)
 
 -- | Parser para propiedades.
-parseProp :: ParserD Decl
-parseProp = parseName >>= \name ->
-            getState >>= \st -> 
-            if M.member name $ props $ pEnv st
-                then fail "Doble declaración de una propiedad."
-                else parseExpr Nothing tryNewline >>= \e -> 
-                     putState (st {pEnv = envAddProp (pEnv st) name e}) >> 
-                     return (Prop name e)
+parseProp :: ParserD ()
+parseProp = do
+            name <- parseName
+            e <- parseExpr Nothing tryNewline
+            st <- getState
+            putState (st {pDecls = envAddProp (pDecls st) (Prop name e)})
 
 -- | Parser de declaraciones.
-parseDecl :: ParserD Decl
+parseDecl :: ParserD ()
 parseDecl =  parseLet "spec" parseSpec
          <|> parseLet "prop" parseProp
          <|> parseLet "thm"  parseThm
          <|> parseLet "fun"  parseFun
          <|> parseLet "val"  parseVal
 
-parseFromStringDecl :: String -> Either ParseError Decl
+parseFromStringDecl :: String -> Either ParseError ()
 parseFromStringDecl = runParser parseDecl initPState ""
 
--- | Estado inicial para la inferencia de tipos de variables y funciones.
-initVarTy :: VarTy
-initVarTy = (0,M.empty)
-
 -- | Estado inicial del parser.
-initPState :: PState
-initPState = PState { pEnv = initEnvironment
-                    , pVarTy = initVarTy
-                    }
+initPState :: PDeclState
+initPState = PDeclState { pDecls = initDeclarations
+                        , pVarTy = EquP.initPExprState
+                        , pProofs = EquP.initPProofState
+                        }

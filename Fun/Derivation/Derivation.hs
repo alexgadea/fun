@@ -15,3 +15,4 @@ data Derivation = Derivation {
                   , prog :: FunDecl
                   , proof :: Proof
                 }
+    deriving Show
