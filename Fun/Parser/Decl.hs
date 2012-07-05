@@ -134,6 +134,16 @@ parseLet s parse = try $ do many newline
                             many newline
                             return ()
 
+-- | Parsea prefijos para declaración de pruebas.            
+parseBeginProof :: ParserD () -> ParserD ()
+parseBeginProof parse = try $ do 
+                        many newline
+                        keywordBegin
+                        keywordProof
+                        parse
+                        many newline
+                        return ()
+
 -- | Parsea nombres que comienzan con minuscula.
 parseName :: ParserD Text
 parseName = lower >>= \lc -> fmap (pack . (lc :)) (many1 letter)
@@ -236,16 +246,17 @@ parseProof till = do
                     Left per -> getPosition >>= \p -> 
                                 fail $ show $ flip setErrorPos per $
                                 setSourceLine (errorPos per) (sourceLine p-1)
+        parseHack :: String -> String
+        parseHack s = "begin proof" ++ s ++ "\nend proof"
         parseProof' :: EquP.PProofState -> String -> Either ParseError Proof
-        parseProof' pps s = runParser (EquP.proof Nothing True) pps "" s
+        parseProof' pps s = runParser (EquP.proof Nothing True) pps "" (parseHack s)
 
 -- | Parsea un teorema.
 -- TODO: Mejorar el informe de errores.
 parseThm :: ParserD ()
 parseThm = do
     name <- parseName
-    (whites >> many (newline))
-    p <- parseProof (try $ keywordEnd >> keyword "thm")
+    p <- parseProof (try $ keywordEnd >> keywordProof)
     st <- getState
     let declThm = Thm $ createTheorem name p
     putState (st {pDecls = envAddTheorem (pDecls st) declThm})
@@ -286,7 +297,7 @@ parseProp = do
 parseDecl :: ParserD ()
 parseDecl =  parseLet "spec" parseSpec
          <|> parseLet "prop" parseProp
-         <|> parseLet "thm"  parseThm
+         <|> parseBeginProof parseThm
          <|> parseLet "fun"  parseFun
          <|> parseLet "val"  parseVal
 

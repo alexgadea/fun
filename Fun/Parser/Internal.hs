@@ -46,33 +46,30 @@ rNames = [ "let", "fun", "spec"
          , "thm", "prop", "val"
          , ":", "=", ".", "with"
          , "end", "import", "module"
-         , "deriving", "from"
+         , "deriving", "from", "begin"
+         , "proof"
          ]
 
 keyword :: String -> ParserD ()
 keyword  = reserved lexer
-
 keywordModule :: ParserD ()
 keywordModule = keyword "module"
-
+keywordBegin :: ParserD ()
+keywordBegin = keyword "begin"
+keywordProof :: ParserD ()
+keywordProof = keyword "proof"
 keywordImport :: ParserD ()
 keywordImport = keyword "import"
-
 keywordDeriving :: ParserD ()
 keywordDeriving = keyword "deriving"
-
 keywordFrom :: ParserD ()
 keywordFrom = keyword "from"
-
 keywordLet :: ParserD ()
 keywordLet = keyword "let"
-
 keywordDot :: ParserD ()
 keywordDot = keyword "."
-
 keywordWith :: ParserD ()
 keywordWith = keyword "with"
-
 keywordEnd :: ParserD ()
 keywordEnd = keyword "end"
 
