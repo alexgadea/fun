@@ -11,6 +11,7 @@ import Control.Monad.Identity (Identity)
 
 -- Imports Data.*
 import qualified Data.Map as M (Map)
+import Data.Text (Text)
 
 -- Imports Equ.
 import Equ.Types(Type)
@@ -19,6 +20,8 @@ import qualified Equ.Parser as EquP (PProofState, PExprState)
 
 -- Imports Fun.
 import Fun.Declarations
+
+type TextFilePath = Text
 
 type EitherName = Either VarName FuncName
 

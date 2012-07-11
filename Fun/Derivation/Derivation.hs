@@ -15,4 +15,8 @@ data Derivation = Derivation {
                   , prog :: FunDecl
                   , proof :: Proof
                 }
-    deriving Show
+                
+instance Show Derivation where
+    show d = "\n\nDeriv\nSpec: " ++ show (espec d) ++
+             "\nProg: " ++ show (prog d) ++
+             "\nProof: " ++ show (proof d)

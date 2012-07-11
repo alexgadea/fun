@@ -9,9 +9,7 @@ import Equ.Types
 import Equ.Expr
 import Data.Text hiding (map)
 
-
 -- | Declaraciones en Fun
-
 data SpecDecl = Spec Func [Variable] PE.PreExpr
     deriving (Eq,Show)
 
@@ -30,6 +28,11 @@ data ValDecl = Val Variable PE.PreExpr
 data TypeDecl = NewType Type [Constant] [(Operator,[Variable],PE.PreExpr)] -- Para implementar a futuro.
     deriving (Eq,Show)
 
+getThmName :: ThmDecl -> Text
+getThmName (Thm t) = truthName t
+
+getFunDerivingFrom :: FunDecl -> Maybe Text
+getFunDerivingFrom (Fun _ _ _ mt) = mt
 
 class Decl a where
     getFuncDecl :: a -> Maybe Func
@@ -70,6 +73,3 @@ isPrg (PE.If c e1 e2) = isPrg c && isPrg e1 && isPrg e2
 isPrg (PE.Case e patterns) = isPrg e && (and $ map (\(p,e) -> isPrg p && isPrg e) patterns)
 isPrg (PE.Paren pe) = isPrg pe
 isPrg _ = True
-
-
-

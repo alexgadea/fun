@@ -10,6 +10,7 @@ import qualified Equ.Parser as EquP ( Parser'
                                     , initPExprState
                                     , PProofState 
                                     , PExprState
+                                    , pProofSet
                                     )
 import qualified Equ.PreExpr as PE ( PreExpr, PreExpr' (Var), PreExpr' (Fun)
                                    , toFocus,Focus,unParen
@@ -32,7 +33,7 @@ import Text.Parsec.Token(lexeme)
 -- Imports Data.*
 import Data.Text(Text,pack)
 import Data.Maybe (fromMaybe,fromJust)
-import qualified Data.Map as M (empty,Map,member,insert,(!)) 
+import qualified Data.Map as M (empty,Map,member,insert,(!),lookup) 
 
 -- Imports Monad.
 import Control.Monad.Identity (unless, Identity)
@@ -259,7 +260,18 @@ parseThm = do
     p <- parseProof (try $ keywordEnd >> keywordProof)
     st <- getState
     let declThm = Thm $ createTheorem name p
-    putState (st {pDecls = envAddTheorem (pDecls st) declThm})
+    putState (st { pDecls = envAddTheorem (pDecls st) declThm
+                 , pProofs = addTheorem (pProofs st) name p
+                 })
+    
+-- | Agrega un teorema parseado al estado de parseo de teoremas.
+addTheorem :: EquP.PProofState -> Text -> Proof -> EquP.PProofState
+addTheorem pst pn p = 
+        let proofSet = EquP.pProofSet pst in
+            case M.lookup pn proofSet of
+                (Just (Just _)) -> pst
+                _ -> let proofSetUpdated = M.insert pn (Just p) proofSet in
+                            pst {EquP.pProofSet = proofSetUpdated}
 
 -- | Parser para declaracion de valores.
 {- | Comprobaciones al parsear:

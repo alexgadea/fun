@@ -10,6 +10,7 @@ import Text.Parsec
 import Fun.Parser.Internal
 import Fun.Parser.Import
 import Fun.Parser.Decl
+import Fun.Derivation
 import Fun.Module
 
 -- | Parser de modulos de fun.
@@ -24,6 +25,3 @@ parseModule = do
 
 parseFromStringModule :: String -> Either ParseError Module
 parseFromStringModule = runParser parseModule initPState ""
-
-parseFromFileModule :: FilePath -> IO ()
-parseFromFileModule fp = readFile fp >>= print . parseFromStringModule
