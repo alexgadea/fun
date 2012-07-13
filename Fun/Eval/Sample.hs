@@ -9,40 +9,13 @@ import Equ.Proof(printProof)
 import Equ.Theories.Arith
 import Equ.Theories.List
 import Equ.Theories.FOL
+import Equ.IndType
 import Fun.Eval.Rules
 import Fun.Theories(funTheory)
 import qualified Fun.Decl as D (FunDecl(..))
 import Fun.Eval.Proof
 
 import Control.Monad.Reader
--- import qualified Fun.Eval.Normal as N
-
-suc :: (Operator,[(PreExpr,PreExpr)])
-suc = (natSucc, [])
-
-addition :: (Operator,[(PreExpr,PreExpr,PreExpr)])
-addition = (natSum, [ (zero,varM,varM)
-                    , (suc varN,varM, suc (plus varN varM))
-                    ]
-            )
-    where varM = Var $ var "m" $ TyAtom ATyNat 
-          varN = Var $ var "n" $ TyAtom ATyNat 
-          zero = Con $ natZero
-          suc = UnOp natSucc 
-          plus = BinOp natSum
-
-
-len :: (Operator,[(PreExpr,PreExpr)])
-len = (listLength,[ (Con listEmpty,Con natZero)
-               , (app varX varXS,suc (UnOp listLength varXS))
-               ]
-      )
-    where varX = Var $ var "x" $ TyVar "A"
-          varXS = Var $ var "xs" $ TyList $ TyVar "A"
-          suc = UnOp natSucc
-          app = BinOp listApp
-
-app = (listApp,[])
 
 idFunDecl = D.Fun idFun [varX] (Var varX) Nothing
     where idFun = Func "ID" (TyVar "A" :-> TyVar "A")
@@ -80,11 +53,9 @@ notOpRules = (folNeg, [(true,false),(false,true)])
 
 
 env :: Env
-env = initEnv { unary = [suc,len,notOpRules] 
-              , binary = [addition,app] 
-              , decls = [idFunDecl,fstFunDecl,twiceDecl,isZero]
+env = initEnv { decls = [idFunDecl,fstFunDecl,twiceDecl,isZero]
               }
 
 
 
-test = either error (putStrLn . printProof) . flip runReaderT (Eager,env,funTheory) . evalF
+test f p = either error (putStrLn . p) . flip runReaderT (Normal,env,funTheory) . f

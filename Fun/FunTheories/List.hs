@@ -16,6 +16,7 @@ import Equ.IndType
 import Equ.IndTypes(list)
 import Fun.Theory
 import Fun.FunTheories.Arith
+import Fun.Decl
 
 import Data.Maybe(fromJust)
 import Data.Text hiding (map)
@@ -50,6 +51,20 @@ listIndex = (EquList.listIndex,[varN,varYS],exprListIndex)
                                 BinOp EquList.listIndex (Var varT) (Var varXS))
                             ]
 
+
+listLength :: OpDecl
+listLength = OpDecl EquList.listLength [varXS] lenFun
+    where lenFun :: PreExpr
+          lenFun = Case (Var varXS)
+                   [ (Con EquList.listEmpty,Con EquArith.natZero)
+                   , (cons (Var varX) (Var varXS),suc (UnOp EquList.listLength (Var varXS)))
+                   ]          
+          varX = var "x" $ TyVar "A"
+          varXS = var "xs" $ TyList $ TyVar "A"
+          suc = UnOp EquArith.natSucc
+          cons = BinOp EquList.listApp
+
+
 {- concat xs ys = case xs of
                       [] -> ys
                       (x:xs) -> x:(concat xs ys)
@@ -73,7 +88,7 @@ listTheorems = []
 listTheory = Theory {
              tname = "Listas"
            , indType = [list,natural]
-           , operators = []
+           , operators = [listLength]
            , quantifiers = listQuantifiers
            , axioms = listAxioms
            , theorytheorems = listTheorems

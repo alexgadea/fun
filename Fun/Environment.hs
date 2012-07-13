@@ -27,9 +27,11 @@ data ImportedModule = ImportedModule { imodName :: ModName
                                      }
 
 instance Show ImportedModule where
-    show im = "\n========ImportInfo=========\nimodName: " ++ show (imodName im) ++
-              "\nimportPath: " ++ show (importPath im) ++ 
-              "\n===========================\n"
+    show im = unlines [ "========ImportInfo========="
+                      , "imodName: " ++ show (imodName im) 
+                      , "importPath: " ++ show (importPath im)
+                      , "==========================="
+                      ]
 
 instance Eq ImportedModule where
     im == im' = imodName im == imodName im'
@@ -91,7 +93,7 @@ checkModule m = do
 
 extractDeclImported :: Module -> Environment -> Declarations
 extractDeclImported m env = 
-            foldl (\d m -> concatDeclarations d m) (decls m) imDecls
+            foldl concatDeclarations (decls m) imDecls
     where
         imMods :: Module -> [Module]
         imMods m = L.filter (\m' -> Import (modName m') `L.elem` imports m) env

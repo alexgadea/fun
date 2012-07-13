@@ -17,6 +17,7 @@ import Equ.IndTypes
 import Equ.Types
 
 import Data.List(find)
+import Control.Monad((>=>))
 import Control.Monad.Reader
 import Control.Arrow ((&&&),(***))
 import Control.Applicative((<$>),liftA2)
@@ -40,16 +41,12 @@ type EvalM = Either String
 
 -- | Las reglas que definen el comportamiento de operadores consisten
 -- en un mapeo de patrones a expresiones.
-type RulesUnary = [(Operator,[(PreExpr,PreExpr)])]
-type RulesBinary = [(Operator,[(PreExpr,PreExpr,PreExpr)])]
 
-data Env = Env { unary :: RulesUnary
-               , binary :: RulesBinary
-               , decls :: [FunDecl]
-               }
+data Env = Env { decls :: [FunDecl] }
+
 
 initEnv :: Env
-initEnv = Env [] [] []
+initEnv = Env []
 
 -- | Una aplicación parcial de una función a varios argumentos.
 type PartialApp = (Func,[PreExpr])
@@ -75,6 +72,10 @@ data Evaluation = Evaluation {
 
 fail' :: String -> EvState a
 fail' = lift . Left
+
+lookupOp :: Operator -> [OpDecl] -> Maybe ([Variable],PreExpr)
+lookupOp op = find eqOp >=> (\(OpDecl _ vs body) -> return (vs,body))
+    where eqOp (OpDecl op' _ _) = op == op'
 
 errOpNotInEnv :: Operator -> EvState a
 errOpNotInEnv op = fail' $ "Operator not declared: " ++ show op
@@ -109,11 +110,8 @@ findFun f = getEnv >>= maybe (fail' $ "Function not declared: " ++ show f) getDe
             . decls
     where getDecl (Fun f vs e _) = return (f,vs,e)
 
-findOpUnary :: Operator -> EvState [(PreExpr,PreExpr)]
-findOpUnary op = getEnv >>= maybe (errOpNotInEnv op) return . lookup op . unary
-
-findOpBinary :: Operator -> EvState [(PreExpr,PreExpr,PreExpr)]
-findOpBinary op = getEnv >>= maybe (errOpNotInEnv op) return . lookup op . binary 
+findOpDecl :: Operator -> EvState ([Variable],PreExpr)
+findOpDecl op = getTheories >>= maybe (errOpNotInEnv op) return . lookupOp op . concatMap operators
 
 matching :: PreExpr -> PreExpr -> PreExpr -> Maybe PreExpr
 matching e p r = either (const Nothing) (return . applySubst r) $ match p e

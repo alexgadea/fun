@@ -45,19 +45,15 @@ evalToProof e@(Fun _) = fail' "evalFun"
 evalToProof e@(Paren _) = evalSubExpr e E.goDown
 evalToProof e@(UnOp op e') =  isCan e' >>= \cane' ->
                               if cane'
-                              then findOpUnary op >>= \rules ->
-                                   case firstMatchingUn e' rules of
-                                     Nothing -> fail' "evalUnOp"
-                                     Just e'' -> eval e (toFocus e'') (P.EvUnary op)
+                              then findOpDecl op >>= \(vs,body) ->
+                                   eval e (applyArgs body  vs [e']) (P.EvUnary op)
                               else evalSubExpr e E.goDown
 
 evalToProof e@(BinOp op e1 e2) = isCan e1 >>= \cane1 ->
                                  isCan e2 >>= \cane2 ->
                                  case (cane1, cane2) of
-                                   (True,True) -> findOpBinary op >>= \rules ->
-                                                 case firstMatchingBin e1 e2 rules of
-                                                   Nothing -> fail' "evalBinOp"
-                                                   Just e' -> eval e (toFocus e') (P.EvBinary op)
+                                   (True,True) -> findOpDecl op >>= \(vs,body) ->
+                                                 eval e (applyArgs body vs [e1,e2]) (P.EvBinary op)
                                    (True,False) -> evalSubExpr e E.goDownR
                                    (False,_) -> evalSubExpr e E.goDown
     where prfe1 = evalToProof e1
@@ -107,6 +103,9 @@ evalAppSat body vs e1 e2 = maybe (fail' "evalAppSat")
 bool :: Bool -> a -> a -> a
 {-# INLINE bool #-}
 bool b e e' = if b then e else e'
+
+applyArgs :: PreExpr -> [E.Variable] -> [PreExpr] -> E.Focus
+applyArgs e vs args = toFocus . E.applySubst e $ fromList $ zip vs args
 
 -- | Unsafe!
 fromRight :: Either a b -> b

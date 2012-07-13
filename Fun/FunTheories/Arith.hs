@@ -14,6 +14,7 @@ import Equ.Syntax
 import Equ.IndType
 import Equ.IndTypes(natural)
 import Fun.Theory
+import Fun.Decl
 
 import Data.Maybe(fromJust)
 import Data.Text hiding (map)
@@ -39,8 +40,8 @@ natSumExpr = Case (Var varN) [ (Con EquArith.natZero,
                           UnOp EquArith.natSucc (BinOp EquArith.natSum (Var varN) (Var varM)))
                        ]
 
-natSum :: (Operator,[Variable],PreExpr)
-natSum = (EquArith.natSum,[varN,varM],natSumExpr)
+natSum :: OpDecl 
+natSum = OpDecl EquArith.natSum [varN,varM] natSumExpr
                            
 {- prod n m = case n of
                  0 -> 0
@@ -56,8 +57,8 @@ natProdExpr = Case (Var varN) [ (Con EquArith.natZero,
                            BinOp EquArith.natSum (Var varT) (BinOp EquArith.natProd (Var varT) (Var varM)))
                        ]
 
-natProd :: (Operator,[Variable],PreExpr)
-natProd = (EquArith.natProd,[varN,varM],natProdExpr)
+natProd :: OpDecl
+natProd = OpDecl EquArith.natProd [varN,varM] natProdExpr
 
 
 arithOperators = [natSum,natProd]
