@@ -195,12 +195,8 @@ parseSF ecnstr = parseFuncPreExpr >>= \fun ->
         parseF fun cnstr vs = do
             e <- parseExpr (Just vs) tryNewline
             st <- getState
-            case isPrg e of
-                False -> fail "La expresión no es un programa."
-                _ -> do
-                    mname <- (parseTheoName <|> return Nothing)
-                    putState (st {pDecls = envAddFun (pDecls st) 
-                                                     (cnstr fun vs e mname)}) 
+            mname <- (parseTheoName <|> return Nothing)
+            putState (st {pDecls = envAddFun (pDecls st) (cnstr fun vs e mname)}) 
         parseTheoName :: ParserD (Maybe Text)
         parseTheoName = keywordDerivingFrom >> parseName >>= return . Just
         parseS :: Func -> S -> [Variable] -> ParserD ()

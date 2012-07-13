@@ -15,7 +15,7 @@ import Equ.IndType
 
 import qualified Data.Map as M
 import Data.Text hiding (map,concatMap)
-import qualified Data.List as L (map,elem)
+import qualified Data.List as L (map,elem,delete,filter)
 import Data.Either (lefts)
 import Data.Maybe (fromJust)
 
@@ -29,6 +29,15 @@ data Declarations = Declarations {
                                            -- los nuevos tipos declarados. Por ahora usaremos solo el valor inicial que le pasamos,
                                            -- el cual contiene los tipos basicos de Equ.
             }
+
+concatDeclarations :: Declarations -> Declarations -> Declarations
+concatDeclarations d d' = Declarations 
+                            (specs d ++ specs d')
+                            (functions d ++ functions d')
+                            (theorems d ++ theorems d')
+                            (props d ++ props d')
+                            (vals d ++ vals d')
+                            (indTypes d ++ indTypes d')
 
 instance Show Declarations where
     show decls = "\nSpecs " ++ show (specs decls) ++ "\n" ++
@@ -59,36 +68,79 @@ funcsDef :: Declarations -> [Func]
 funcsDef = L.map (\(Fun f _ _ _) -> f) . functions
 
 checkSpecs :: Declarations -> [Either (ErrInDecl SpecDecl) SpecDecl]
-checkSpecs ds = L.map (\spec -> 
+checkSpecs ds = checkDoubleDef specsDefs mErr ++
+                L.map (\spec -> 
                 case (checkDefVar spec ds, checkDefFunc spec ds) of
                     ([],[]) -> Right spec
-                    (vErrs,fErrs) -> Left $ (vErrs ++ fErrs, spec)) $ specs ds
+                    (vErrs,fErrs) -> Left $ (vErrs ++ fErrs, spec)) specsDefs
+    where
+        specsDefs :: [SpecDecl]
+        specsDefs = specs ds
+        mErr :: SpecDecl -> Either (ErrInDecl SpecDecl) SpecDecl
+        mErr spec@(Spec f _ _) = if spec `L.elem` L.delete spec specsDefs
+                                    then Left ([MultipleDeclaredFunc f],spec)
+                                    else Right spec
                     
 checkFuns :: Declarations -> [Either (ErrInDecl FunDecl) FunDecl]
 checkFuns ds = 
+    checkDoubleDef funsDefs mErr ++
     L.map (\fun -> 
     case (checkDefVar fun ds, checkDefFunc fun ds, checkIsPrg  fun) of
         ([],[],True) -> Right fun
-        (vErrs,fErrs,_) -> Left $ 
-            (vErrs ++ fErrs ++ [InvalidPrgDeclaration], fun)) $ functions ds
+        (vErrs,fErrs,isP) -> Left $ if isP 
+                                  then (vErrs ++ fErrs, fun)
+                                  else (vErrs ++ fErrs ++ [InvalidPrgDeclaration], fun) 
+          ) funsDefs
+    where
+        funsDefs :: [FunDecl]
+        funsDefs = functions ds
+        mErr :: FunDecl -> Either (ErrInDecl FunDecl) FunDecl
+        mErr fun@(Fun f _ _ _) = if fun `L.elem` L.delete fun funsDefs
+                                    then Left ([MultipleDeclaredFunc f],fun)
+                                    else Right fun
 
 checkThm :: Declarations -> [Either (ErrInDecl ThmDecl) ThmDecl]
-checkThm = L.map (\thm@(Thm p) -> 
+checkThm ds =  checkDoubleDef thmDefs mErr ++
+            L.map (\thm@(Thm p) -> 
             either (\p -> Left ([InvalidProofForThm p],thm)) (const $ Right thm) 
-                (validateProof (thProof p))) . theorems
-
+                (validateProof (thProof p))) thmDefs
+    where
+        thmDefs :: [ThmDecl]
+        thmDefs = theorems ds
+        mErr :: ThmDecl -> Either (ErrInDecl ThmDecl) ThmDecl
+        mErr thm = if thm `L.elem` L.delete thm thmDefs
+                    then Left ([MultipleDeclaredThm $ getThmName thm],thm)
+                    else Right thm
+        
 checkVals :: Declarations -> [Either (ErrInDecl ValDecl) ValDecl]
-checkVals ds = L.map (\val -> 
+checkVals ds =  checkDoubleDef valsDefs mErr ++
+                L.map (\val -> 
                 case (checkDefVar val ds, checkDefFunc val ds) of
                     ([],[]) -> Right val
-                    (vErrs,fErrs) -> Left $ (vErrs ++ fErrs, val)) $ vals ds
+                    (vErrs,fErrs) -> Left $ (vErrs ++ fErrs, val)) valsDefs
+    where
+        valsDefs :: [ValDecl]
+        valsDefs = vals ds
+        mErr :: ValDecl -> Either (ErrInDecl ValDecl) ValDecl
+        mErr val@(Val v _) = if val `L.elem` L.delete val valsDefs
+                                then Left ([MultipleDeclaredVar v],val)
+                                else Right val
+
+checkDoubleDef :: (Decl d, Eq d) => [d] -> (d -> Either (ErrInDecl d) d) -> 
+                                    [Either (ErrInDecl d) d]
+checkDoubleDef decls mErr = L.filter (\d -> case d of
+                                            Left err -> True
+                                            _ -> False) $ L.map mErr decls
 
 checkDefVar :: Decl d => d -> Declarations -> [DeclError]
 checkDefVar d ds = do
         lefts $ L.map (\(PE.Var v, _) -> 
-                    if v `L.elem` valsDef ds
+                    if v `L.elem` (valsDef ds ++ argsVarsDef)
                     then Right ()
                     else Left $ UndeclaredVar v) (PE.listOfVar $ getFocusDecl d)
+    where
+        argsVarsDef :: [Variable]
+        argsVarsDef = maybe [] id $ getVarsDecl d
 
 checkDefFunc :: Decl d => d -> Declarations -> [DeclError]
 checkDefFunc d ds = do

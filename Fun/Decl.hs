@@ -11,19 +11,34 @@ import Data.Text hiding (map)
 
 -- | Declaraciones en Fun
 data SpecDecl = Spec Func [Variable] PE.PreExpr
-    deriving (Eq,Show)
+    deriving Show
+
+instance Eq SpecDecl where
+    (Spec f _ _) == (Spec f' _ _) = f == f'
 
 data PropDecl = Prop Text PE.PreExpr
-    deriving (Eq,Show)
+    deriving Show
+
+instance Eq PropDecl where
+    (Prop t _) == (Prop t' _) = t == t'
 
 data ThmDecl = Thm Theorem
-    deriving (Eq,Show)
+    deriving Show
+
+instance Eq ThmDecl where
+    thm == thm' = getThmName thm == getThmName thm'
 
 data FunDecl = Fun Func [Variable] PE.PreExpr (Maybe Text) -- Puede tener la derivación o no.
-    deriving (Eq,Show)
+    deriving Show
+
+instance Eq FunDecl where
+    (Fun f _ _ _) == (Fun f' _ _ _) = f == f'
 
 data ValDecl = Val Variable PE.PreExpr
-    deriving (Eq,Show)
+    deriving Show
+    
+instance Eq ValDecl where
+    (Val v _) == (Val v' _) = v == v'
 
 data TypeDecl = NewType Type [Constant] [(Operator,[Variable],PE.PreExpr)] -- Para implementar a futuro.
     deriving (Eq,Show)
@@ -37,31 +52,37 @@ getFunDerivingFrom (Fun _ _ _ mt) = mt
 class Decl a where
     getFuncDecl :: a -> Maybe Func
     getExprDecl :: a -> Maybe PE.PreExpr
+    getVarsDecl :: a -> Maybe [Variable]
 
 instance Decl SpecDecl where
     getFuncDecl (Spec f _ _) = Just f
     getExprDecl (Spec _ _ e) = Just e
+    getVarsDecl (Spec _ vs _) = Just vs
     
 instance Decl PropDecl where
     getFuncDecl _ = Nothing
     getExprDecl (Prop _ e) = Just e
+    getVarsDecl _ = Nothing
     
 instance Decl ThmDecl where
     getFuncDecl _ = Nothing
-    getExprDecl (Thm t) = let (Expr p) = thExpr t in
-                              Just p
+    getExprDecl (Thm t) = let (Expr p) = thExpr t in Just p
+    getVarsDecl _ = Nothing
     
 instance Decl FunDecl where
     getFuncDecl (Fun f _ _ _) = Just f
     getExprDecl (Fun _ _ p _) = Just p
+    getVarsDecl (Fun _ vs _ _) = Just vs
     
 instance Decl ValDecl where
     getFuncDecl _ = Nothing
     getExprDecl (Val _ p) = Just p
+    getVarsDecl _ = Nothing
     
 instance Decl TypeDecl where
     getFuncDecl _ = Nothing
     getExprDecl _ = Nothing
+    getVarsDecl _ = Nothing
 
 isPrg :: PE.PreExpr -> Bool
 isPrg (PE.Quant _ _ _ _) = False

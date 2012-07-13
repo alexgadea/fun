@@ -1,10 +1,13 @@
-module Adkasjd
+module TestModule
 
-import Jeje
+import Otrooo
 
 let fun Hola : Int :-> Int
 Hola x = 0
 deriving from otroteorema
+
+
+let val y = 1
 
 let spec Hola x = y
 
@@ -19,8 +22,6 @@ F x = 0
 deriving from teorema
 
 let spec F x = y + 1
-
-let val y = 0
 
 
 begin proof teorema

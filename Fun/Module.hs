@@ -8,15 +8,17 @@ import Data.Text (Text)
 
 type ModName = Text
 
-data Module = Module {
-                modName :: ModName
-              , imports :: [Import]
-              , decls   :: Declarations
-              , derivations :: [Derivation]
-            }
+data Module = Module { modName :: ModName
+                     , imports :: [Import]
+                     , decls   :: Declarations
+                     , derivations :: [Derivation]
+                     }
+
+instance Eq Module where
+    m == m' = modName m == modName m'
             
 instance Show Module where
-    show m = "\n==========================\nModName: " ++ show (modName m) ++
+    show m = "\n========LoadModule=====\nModName: " ++ show (modName m) ++
              "\nImports: " ++ show (imports m) ++
              "\n\nDecls: " ++ show (decls m) ++
              "\n\nDerivations: " ++ show (derivations m) ++
@@ -26,4 +28,4 @@ data Import = Import ModName
     deriving (Eq, Show)
 
 addDerivationsModule :: Module -> Module
-addDerivationsModule m = m {derivations = createDerivations (decls m)}
+addDerivationsModule m = m {derivations = createDerivations (decls m)} 

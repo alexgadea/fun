@@ -1,4 +1,6 @@
 module Jeje
 
+import Otrooo
 
-let fun F x = 0
+let fun Faa x = 0
+
