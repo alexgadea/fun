@@ -16,9 +16,7 @@ Bug-reports:         https://github.com/alexgadea/fun/issues
 Library
     Exposed-modules:        Fun.Theories, 
                             Fun.Environment, 
-                            Fun.Patterns, 
                             Fun.Theory, 
-                            Fun.IndType, 
                             Fun.Decl, 
                             Fun.Module, 
                             Fun.Parser.Decl, 
@@ -27,7 +25,7 @@ Library
                             Fun.FunTheories.List
 
     Build-depends:          base >= 4.2, text >= 0.11.1.5, 
-                            containers >= 0.4.0.0, equ >= 0.1, mtl >= 2.0.1.0,
+                            containers >= 0.4.0.0, equ >= 0.2, mtl >= 2.0.1.0,
                             parsec >= 3.1.1
     
     GHC-Options:         -Odph -Wall

@@ -86,7 +86,7 @@ fstToReduce e@(App (Fun _) _) = maybe (return Nothing)
                                 (\foc ->  isCan (fst foc) >>= \canFoc -> 
                                          if canFoc then return Nothing else return $ Just E.goDownR)
                                 $ E.goDownR (toFocus e )
-fstToReduce e@(App e' _) = fstToReduce e' >>= return . maybe Nothing (Just . (E.goDown >=>))
+fstToReduce e@(App e' _) = maybe Nothing (Just . (E.goDown >=>)) <$> fstToReduce e'
 fstToReduce _ = return Nothing
 
 closure :: [E.Variable] -> PreExpr -> PreExpr -> Maybe E.ExprSubst

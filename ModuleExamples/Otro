@@ -1,3 +1,0 @@
-module Otro
-
-let fun F x = x

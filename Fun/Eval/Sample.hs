@@ -38,7 +38,7 @@ isZero = D.Fun isZeroF [varX] (Case (Var varX) [ (zero,true)
                                                , (sucY,false)
                                                ]) Nothing
     where
-          zero = Con $ natZero
+          zero = Con natZero
           varX = var "x" $ TyAtom ATyNat
           varY = Var $ var "y" $ TyAtom ATyNat
           sucY = UnOp natSucc varY

@@ -8,15 +8,15 @@ import Equ.Syntax
 import qualified Equ.PreExpr as PE
 
 
-type DM a = Either [DerivationError] a
+type DM a = Either (ErrInDeriv Derivation) a
 
-whenDM :: (a -> Bool) -> [DerivationError] -> a -> DM a
-whenDM p e a | p a       = return a
-             | otherwise = Left e
-             
-whenDM' :: Bool -> [DerivationError] -> DM ()
-whenDM' b e | b         = return ()
-            | otherwise = Left e
+-- whenDM :: (a -> Bool) -> [ErrInDeriv DerivationError] -> a -> DM a
+-- whenDM p e a | p a       = return a
+--              | otherwise = Left e
+--              
+-- whenDM' :: Bool -> [ErrInDeriv DerivationError] -> DM ()
+-- whenDM' b e | b         = return ()
+--             | otherwise = Left e
 
 -- getEspecFun :: Derivation -> DM Func
 -- getEspecFun =

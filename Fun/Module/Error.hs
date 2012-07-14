@@ -1,5 +1,6 @@
 module Fun.Module.Error where
 
+import Fun.Derivation
 import Fun.Derivation.Error
 import Fun.Decl.Error
 import Fun.Parser
@@ -16,23 +17,25 @@ data ModuleError = ModuleParseError ParseError
                     , mErrFuns  :: [ErrInDecl FunDecl]
                     , mErrVals  :: [ErrInDecl ValDecl]
                     , mErrThm   :: [ErrInDecl ThmDecl]
-                    , mErrDer   :: [DerivationError]
+                    , mErrDer   :: [ErrInDeriv Derivation]
                     }
 
 instance Show ModuleError where
     show (ModuleParseError perr) = show perr
-    show (ModuleCycleImport (mn:mns)) =
-        "\nImport ciclico:\n\tbegin in -> " ++ show (unpack mn) ++
-        (foldr (\mn s -> s ++ "\n\timport -> " ++ show (unpack mn)) "" (init mns)) ++ 
-        "\n\tend in -> " ++ (show $ last mns) ++ "\n"
-    show m = "\n=============ErrorsInModule==========\n" ++
-             "Modulo: " ++ show (mName m) ++
-             "\nSpecs con error: " ++  show (mErrSpecs m) ++
-             "\nFuns con error: " ++  show (mErrFuns m) ++
-             "\nVals con error: " ++  show (mErrVals m) ++
-             "\nThm con error: " ++  show (mErrThm m) ++
-             "\nDer con error: " ++  show (mErrDer m) ++
-             "\n====================================\n"
+    show (ModuleCycleImport (mn:mns)) = 
+        unlines [ "Import ciclico:\n\tbegin in -> " ++ show (unpack mn)
+                , foldr (\mn s -> s ++ "\n\timport -> " ++ show (unpack mn)) "" (init mns)
+                , "\tend in -> " ++ show (last mns)
+                ]
+    show m = unlines [ "\n=============ErrorsInModule=========="
+                     , "Modulo: " ++ show (mName m)
+                     , "Specs con error: " ++  show (mErrSpecs m)
+                     , "Funs con error: " ++  show (mErrFuns m)
+                     , "Vals con error: " ++  show (mErrVals m)
+                     , "Thm con error: " ++  show (mErrThm m)
+                     , "Der con error: " ++  show (mErrDer m)
+                     , "===================================="
+                     ]
 
 instance Eq ModuleError where
     ModuleParseError p == ModuleParseError p' = error "Impossible"
@@ -45,6 +48,6 @@ instance Eq ModuleError where
 
 createError :: Text -> ([ErrInDecl SpecDecl], [ErrInDecl FunDecl], 
                 [ErrInDecl ValDecl], [ErrInDecl ThmDecl], 
-                [DerivationError]) -> ModuleError
+                [ErrInDeriv Derivation]) -> ModuleError
 createError name (errSpecs, errFuns, errVals, errThm, errDer) = 
                 ModuleError name errSpecs errFuns errVals errThm errDer

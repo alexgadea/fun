@@ -38,6 +38,9 @@ lexer = lexer' { whiteSpace = oneOf " \t" >> return ()}
         lexer' :: TokenParser PDeclState
         lexer' = makeTokenParser $ 
                     emptyDef { reservedNames = rNames
+                             , commentStart = "{-"
+                             , commentEnd = "-}"
+                             , commentLine = "--"
                              , identStart  = alphaNum <|> char '_'
                              , identLetter = alphaNum <|> char '_'
                              , caseSensitive = True
@@ -84,6 +87,18 @@ whites = whiteSpace lexer
 
 tryNewline :: ParserD ()
 tryNewline = try newline >> return ()
+
+lineComment :: ParserD ()
+lineComment = try $ symbol lexer "--" >> manyTill anyChar newline >> return ()
+
+blockComment :: ParserD ()
+blockComment = try $ do 
+                symbol lexer "{-"
+                manyTill anyChar endIn
+                return ()
+    where
+        endIn = (try eof >> error "Esperando -}")
+             <|> try (symbol lexer "-}")
 
 manyTillWithEnd :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m end -> 
                    ParsecT s u m ([a],end)

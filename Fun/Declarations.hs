@@ -17,7 +17,7 @@ import qualified Data.Map as M
 import Data.Text hiding (map,concatMap)
 import qualified Data.List as L (map,elem,delete,filter)
 import Data.Either (lefts)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust,fromMaybe)
 
 data Declarations = Declarations {
                    specs     :: [SpecDecl]
@@ -47,19 +47,19 @@ instance Show Declarations where
                  "Vals " ++ show (vals decls)
             
 envAddFun :: Declarations -> FunDecl -> Declarations
-envAddFun env f = env {functions = f:(functions env)}
+envAddFun env f = env {functions = f : functions env}
 
 envAddSpec :: Declarations -> SpecDecl -> Declarations
-envAddSpec env s = env {specs = s:(specs env)} 
+envAddSpec env s = env {specs = s : specs env} 
 
 envAddVal :: Declarations -> ValDecl -> Declarations
-envAddVal env v = env {vals = v:(vals env)}
+envAddVal env v = env {vals = v : vals env}
 
 envAddTheorem :: Declarations -> ThmDecl -> Declarations
-envAddTheorem env p = env {theorems = p:(theorems env)} 
+envAddTheorem env p = env {theorems = p : theorems env} 
 
 envAddProp :: Declarations -> PropDecl -> Declarations
-envAddProp env p = env {props = p:(props env)} 
+envAddProp env p = env {props = p : props env} 
 
 valsDef :: Declarations -> [Variable]
 valsDef = L.map (\(Val v _) -> v) . vals
@@ -72,7 +72,7 @@ checkSpecs ds = checkDoubleDef specsDefs mErr ++
                 L.map (\spec -> 
                 case (checkDefVar spec ds, checkDefFunc spec ds) of
                     ([],[]) -> Right spec
-                    (vErrs,fErrs) -> Left $ (vErrs ++ fErrs, spec)) specsDefs
+                    (vErrs,fErrs) -> Left (vErrs ++ fErrs, spec)) specsDefs
     where
         specsDefs :: [SpecDecl]
         specsDefs = specs ds
@@ -117,7 +117,7 @@ checkVals ds =  checkDoubleDef valsDefs mErr ++
                 L.map (\val -> 
                 case (checkDefVar val ds, checkDefFunc val ds) of
                     ([],[]) -> Right val
-                    (vErrs,fErrs) -> Left $ (vErrs ++ fErrs, val)) valsDefs
+                    (vErrs,fErrs) -> Left (vErrs ++ fErrs, val)) valsDefs
     where
         valsDefs :: [ValDecl]
         valsDefs = vals ds
@@ -133,18 +133,18 @@ checkDoubleDef decls mErr = L.filter (\d -> case d of
                                             _ -> False) $ L.map mErr decls
 
 checkDefVar :: Decl d => d -> Declarations -> [DeclError]
-checkDefVar d ds = do
-        lefts $ L.map (\(PE.Var v, _) -> 
+checkDefVar d ds = lefts $ 
+            L.map (\(PE.Var v, _) -> 
                     if v `L.elem` (valsDef ds ++ argsVarsDef)
                     then Right ()
                     else Left $ UndeclaredVar v) (PE.listOfVar $ getFocusDecl d)
     where
         argsVarsDef :: [Variable]
-        argsVarsDef = maybe [] id $ getVarsDecl d
+        argsVarsDef = fromMaybe [] $ getVarsDecl d
 
 checkDefFunc :: Decl d => d -> Declarations -> [DeclError]
-checkDefFunc d ds = do
-        lefts $ L.map (\(PE.Fun f, _) -> 
+checkDefFunc d ds = lefts $
+            L.map (\(PE.Fun f, _) -> 
                     if f `L.elem` funcsDef ds
                     then Right ()
                     else Left $ UndeclaredFunc f) (PE.listOfFun $ getFocusDecl d)

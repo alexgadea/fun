@@ -1,24 +1,45 @@
 module TestModule
 
-import Otrooo
 
+-- Si descomentamos alguno de los dos, producimos imports ciclicos.
+--import TestModule1
+--import TestModule2
+
+-- Esta es la función que de momento chequea bien como derivación.
 let fun Hola : Int :-> Int
 Hola x = 0
 deriving from otroteorema
 
+-- Acá esta la especificación de la función de arriba.
+let spec Hola x = 0
 
-let val y = 1
-
-let spec Hola x = y
-
-begin proof otroteorema
-0 + 0
-= { Neutro a izquierda de la suma }
+-- Este esta es la prueba de la derivación.
+begin proof otroteorema [ hh:Hola%(x)=0 ]
+Hola%(x)
+= { hh }
 0
 end proof
 
-let fun F : Int :-> Int
-F x = 0
+
+{- Esto es para mostrar que tenemos comentarios en bloque
+
+
+Y que podemos comentar funciones y esas cosas
+
+let fun Hola x = 1
+
+
+-}
+
+let val y = 1
+
+
+
+
+
+-- jijie
+
+let fun F x y z r k = 0
 deriving from teorema
 
 let spec F x = y + 1

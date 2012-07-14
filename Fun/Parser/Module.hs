@@ -19,9 +19,16 @@ parseModule = do
             keywordModule
             mName <- parseModuleName
             imports <- manyTill parseImport parseDecl
-            manyTill parseDecl eof
+            manyTill (parseDecl <|> parseComments) eof
             st <- getState
-            return $ Module mName imports (pDecls st) []
+            let ders = createDerivations $ pDecls st
+            return $ Module mName imports (pDecls st) ders
+    where
+        parseComments :: ParserD ()
+        parseComments = many (  lineComment 
+                            <|> blockComment 
+                            <|> tryNewline
+                             ) >> return ()
 
 parseFromStringModule :: String -> Either ParseError Module
 parseFromStringModule = runParser parseModule initPState ""

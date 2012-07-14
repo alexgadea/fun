@@ -84,15 +84,15 @@ getResult :: Evaluation -> EvState PreExpr
 getResult = maybe (fail' "") return . result
 
 parApp :: PreExpr -> EvState Int
-parApp (PE.Fun f) = findFun f >>= return . arity . fst'
+parApp (PE.Fun f) = arity . fst' <$> findFun f
     where fst' (x,_,_) = x
-parApp (App e _) = parApp e >>= return . (flip (-) 1)
+parApp (App e _) = flip (-) 1 <$> parApp e
 parApp _ = return 0
 
 parApp' :: PreExpr -> EvState (Maybe (Int,(Func,[Variable],PreExpr)))
 parApp' (PE.Fun f) = Just . (arity . fst' &&& id) <$> findFun f
     where fst' (x,_,_) = x
-parApp' (App e _) = fmap (flip (-) 1 *** id) <$> parApp' e
+parApp' (App e _) = fmap (first (flip (-) 1)) <$> parApp' e
 parApp' _ = return Nothing
 
 getArgs :: PreExpr -> Maybe [PreExpr]
@@ -138,7 +138,7 @@ find'' = foldr max' Nothing
           max' _ _ = Nothing
 
 isCan :: PreExpr -> EvState Bool
-isCan e = getTheories >>= return . maybe False id . canonical 
+isCan e = (fromMaybe False . canonical) <$> getTheories
     where canonical ths = getType e >>= getIndType' ths >>= isCanonical e
 
 isCanonical :: PreExpr -> IndType -> Maybe Bool

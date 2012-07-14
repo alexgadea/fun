@@ -1,5 +1,0 @@
-module Otrooo
-
-import Otro
-
-let fun Fa x = x

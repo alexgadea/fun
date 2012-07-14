@@ -7,7 +7,7 @@ import Equ.Rule
 import Equ.Proof
 import Equ.Types
 import Equ.Expr
-import Data.Text hiding (map)
+import Data.Text hiding (map,all)
 
 -- | Declaraciones en Fun
 data SpecDecl = Spec Func [Variable] PE.PreExpr
@@ -99,6 +99,6 @@ isPrg (PE.UnOp op pe) = isPrg pe
 isPrg (PE.BinOp op pe pe') = isPrg pe && isPrg pe'
 isPrg (PE.App pe pe') = isPrg pe && isPrg pe'
 isPrg (PE.If c e1 e2) = isPrg c && isPrg e1 && isPrg e2
-isPrg (PE.Case e patterns) = isPrg e && (and $ map (\(p,e) -> isPrg p && isPrg e) patterns)
+isPrg (PE.Case e patterns) = isPrg e && all (\(p,e) -> isPrg p && isPrg e) patterns
 isPrg (PE.Paren pe) = isPrg pe
 isPrg _ = True

@@ -179,7 +179,7 @@ parseSF ecnstr = parseFuncPreExpr >>= \fun ->
         parseFunWithoutType :: Func -> ParserD ()
         parseFunWithoutType fun = do
             vs <- parseFunArgs
-            case (ecnstr) of
+            case ecnstr of
                 Left cnstr -> parseS fun cnstr vs
                 Right cnstr -> parseF fun cnstr vs
         parseFunWithType :: Func -> ParserD ()
@@ -198,7 +198,7 @@ parseSF ecnstr = parseFuncPreExpr >>= \fun ->
             mname <- (parseTheoName <|> return Nothing)
             putState (st {pDecls = envAddFun (pDecls st) (cnstr fun vs e mname)}) 
         parseTheoName :: ParserD (Maybe Text)
-        parseTheoName = keywordDerivingFrom >> parseName >>= return . Just
+        parseTheoName = Just <$> (keywordDerivingFrom >> parseName)
         parseS :: Func -> S -> [Variable] -> ParserD ()
         parseS fun cnstr vs = do
             e <- parseExpr (Just vs) tryNewline
@@ -228,7 +228,7 @@ parseRel till = do
                                 fail $ show $ flip setErrorPos per $
                                 setSourceLine (errorPos per) (sourceLine p-1)
         parseRel' :: EquP.PProofState -> String -> Either ParseError Relation
-        parseRel' pps s = runParser EquP.rel pps "" s
+        parseRel' pps = runParser EquP.rel pps ""
 
 -- | Parser de pruebas para parserD, parsea una prueba hasta el terminador till.
 parseProof :: ParserD () -> ParserD Proof
@@ -244,7 +244,7 @@ parseProof till = do
                                 fail $ show $ flip setErrorPos per $
                                 setSourceLine (errorPos per) (sourceLine p-1)
         parseHack :: String -> String
-        parseHack s = "begin proof" ++ s ++ "\nend proof"
+        parseHack s = "begin proof " ++ s ++ "\nend proof"
         parseProof' :: EquP.PProofState -> String -> Either ParseError Proof
         parseProof' pps s = runParser (EquP.proof Nothing True) pps "" (parseHack s)
 

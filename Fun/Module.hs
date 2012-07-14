@@ -18,11 +18,15 @@ instance Eq Module where
     m == m' = modName m == modName m'
             
 instance Show Module where
-    show m = "\n========LoadModule=====\nModName: " ++ show (modName m) ++
-             "\nImports: " ++ show (imports m) ++
-             "\n\nDecls: " ++ show (decls m) ++
-             "\n\nDerivations: " ++ show (derivations m) ++
-             "\n=========================="
+    show m = unlines [ "\n========LoadModule========="
+                     , "ModName: " ++ show (modName m)
+                     , "Imports: " ++ show (imports m)
+                     , ""
+                     , "Decls: " ++ show (decls m)
+                     , ""
+                     , "Derivations: " ++ show (derivations m)
+                     , "=========================="
+                     ]
 
 data Import = Import ModName
     deriving (Eq, Show)
