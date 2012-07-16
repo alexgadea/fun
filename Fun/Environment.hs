@@ -5,6 +5,7 @@ import Fun.Module.Error
 import Fun.Parser
 import Fun.Parser.Internal
 import Fun.Parser.Module
+import Fun.Decl(FunDecl)
 import Fun.Declarations
 import Fun.Derivation
 
@@ -130,11 +131,15 @@ loadModules = foldM (\may mn ->
                         mParsedM <- liftIO $ parseFromFileModule mn
                         either (return . Just) checkModule mParsedM) Nothing
 
-testModule :: IO (Either ModuleError (Maybe ModuleError, StateCM))
-testModule = do
-       mParsedM <- liftIO $ parseFromFileModule $ pack "TestModule"
+testModule :: ModName -> IO (Either ModuleError Environment)
+testModule mod = do
+       mParsedM <- liftIO $ parseFromFileModule mod
        either (return . Left) 
               (\m -> do
-                res <- runStateT (checkModule m) initStateCM 
-                return $ Right res
+                (res,(_,env)) <- runStateT (checkModule m) initStateCM 
+                return $ Right env
               ) mParsedM
+
+-- Queries for environments
+getFuncs :: Environment -> [FunDecl]
+getFuncs = concatMap (functions . decls)

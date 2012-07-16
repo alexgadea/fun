@@ -58,4 +58,4 @@ env = initEnv { decls = [idFunDecl,fstFunDecl,twiceDecl,isZero]
 
 
 
-test f p = either error (putStrLn . p) . flip runReaderT (Normal,env,funTheory) . f
+test f p = either error (putStrLn . p) . flip runReaderT (Eager,env,funTheory) . f

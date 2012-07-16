@@ -11,15 +11,17 @@ import qualified Equ.PreExpr as PE (PreExpr'(Fun))
 import Equ.Syntax
 import Equ.Matching
 
-import Equ.TypeChecker(getType)
+import Equ.TypeChecker(getType,unificate)
 import Equ.IndType
 import Equ.IndTypes
 import Equ.Types
 
 import Data.List(find)
+import Data.Maybe(fromMaybe)
+
 import Control.Monad((>=>))
 import Control.Monad.Reader
-import Control.Arrow ((&&&),(***))
+import Control.Arrow ((&&&),(***),first)
 import Control.Applicative((<$>),liftA2)
 import Data.Function(on)
 
@@ -43,10 +45,6 @@ type EvalM = Either String
 -- en un mapeo de patrones a expresiones.
 
 data Env = Env { decls :: [FunDecl] }
-
-
-initEnv :: Env
-initEnv = Env []
 
 -- | Una aplicación parcial de una función a varios argumentos.
 type PartialApp = (Func,[PreExpr])
@@ -81,7 +79,7 @@ errOpNotInEnv :: Operator -> EvState a
 errOpNotInEnv op = fail' $ "Operator not declared: " ++ show op
 
 getResult :: Evaluation -> EvState PreExpr
-getResult = maybe (fail' "") return . result
+getResult = maybe (fail' "No result") return . result
 
 parApp :: PreExpr -> EvState Int
 parApp (PE.Fun f) = arity . fst' <$> findFun f
@@ -123,13 +121,7 @@ matchCouple (e,e') (p,p',res) = case subst of
     where subst = match p e >>= matchWithSubst p' e'                               
 
 firstMatching :: PreExpr -> [(PreExpr,PreExpr)] -> EvState PreExpr
-firstMatching e = maybe (fail' "") return . find'' . map (uncurry (matching e))
-
-firstMatchingUn :: PreExpr -> [(PreExpr,PreExpr)] -> Maybe PreExpr
-firstMatchingUn e =  find'' . map (uncurry (matching e))
-
-firstMatchingBin :: PreExpr -> PreExpr -> [(PreExpr,PreExpr,PreExpr)] -> Maybe PreExpr
-firstMatchingBin e e' = find'' . map (matchCouple (e,e'))
+firstMatching e = maybe (fail' "First matching") return . find'' . map (uncurry (matching e))
 
 find'' :: [Maybe a] -> Maybe a
 find'' = foldr max' Nothing 
@@ -146,17 +138,25 @@ isCanonical (Var _) _ = return True
 isCanonical(PE.Fun _) _ = return True
 isCanonical (Con c) ty = return $ c `elem` constants ty
 isCanonical (UnOp op e) ty = (isConstructor ty op &&) <$> case opTy op of
-                               t1 :-> _ -> join $ liftToIndType (isCanonical e) t1 
+                               t1 :-> _ -> getType e >>=
+                                          unificate t1 >>=
+                                          join . liftToIndType (isCanonical e) 
                                _ -> error "Impossible"
 isCanonical (BinOp op e e') ty = (isConstructor ty op &&) <$>
                                  case opTy op of
-                                   t1 :-> t2 :-> _ -> liftToIndType (isCanonical e) t1 `and'`
-                                                     liftToIndType (isCanonical e') t2
+                                   t1 :-> t2 :-> _ -> getType e >>=
+                                                     unificate t1 >>= \t1' ->
+                                                     getType e' >>=
+                                                     unificate t2 >>= \t2' ->
+                                                     liftToIndType (isCanonical e) t1' `and'`
+                                                     liftToIndType (isCanonical e') t2'
                                    _ -> error "Impossible"
 isCanonical(App e e') ty = case getType e of
                               Nothing -> error "Impossible"
-                              Just (t :-> t') -> liftToIndType (isCanonical e') t `and'`
-                                                liftToIndType (isNeutral e) (t :-> t')
+                              Just (t1 :-> t2) -> getType e' >>=
+                                                 unificate t1 >>= \t1' ->
+                                                 liftToIndType (isCanonical e') t1' `and'`
+                                                 liftToIndType (isNeutral e) (t1 :-> t2)
 isCanonical _ _ = return False
 
 
@@ -166,8 +166,9 @@ isNeutral (UnOp op _) t = return $ isConstructor t op
 isNeutral (BinOp op _ _) t = return $ isConstructor t op
 isNeutral (App e e') t = case getType e of
                             Nothing -> error "Impossible"
-                            Just (t1 :-> t2) -> liftToIndType (isNeutral e) (t1 :-> t2) `and'` 
-                                              liftToIndType (isCanonical e') t1
+                            Just (t1 :-> t2) -> getType e' >>= unificate t1 >>= \t1' ->
+                                               liftToIndType (isNeutral e) (t1 :-> t2) `and'` 
+                                               liftToIndType (isCanonical e') t1'
 isNeutral _ _ = return True
 
           

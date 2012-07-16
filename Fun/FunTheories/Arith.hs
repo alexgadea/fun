@@ -37,7 +37,7 @@ natSumExpr :: PreExpr
 natSumExpr = Case (Var varN) [ (Con EquArith.natZero,
                           Var varM)
                        , (UnOp EquArith.natSucc (Var varT),
-                          UnOp EquArith.natSucc (BinOp EquArith.natSum (Var varN) (Var varM)))
+                          UnOp EquArith.natSucc (BinOp EquArith.natSum (Var varT) (Var varM)))
                        ]
 
 natSum :: OpDecl 

@@ -2,6 +2,10 @@
 module Fun.Eval.Proof where
 
 import Fun.Eval.Rules
+import Fun.Theories(funTheory)
+import Fun.Environment
+import Equ.Parser
+
 
 import Equ.Proof hiding (EvalStep(..),Basic(Evaluation))
 import qualified Equ.Proof as P (EvalStep(..),Basic(Evaluation)) 
@@ -13,6 +17,14 @@ import Data.Map (fromList)
 import Data.Maybe (isNothing,fromJust)
 import Control.Applicative ((<$>))
 import Control.Monad ((>=>))
+import Control.Monad.Reader
+
+testEval :: Environment -> String -> String
+testEval env = either id printProof . 
+               flip runReaderT (Eager,env',funTheory) .
+               evalF . toFocus . parser
+    where env' = Env $ getFuncs env
+
 
 eval :: PreExpr -> E.Focus -> P.EvalStep -> EvState Proof
 {-# INLINE eval #-}
@@ -21,7 +33,7 @@ eval e e' = return . Simple beginCtx relEval (toFocus e) e' . P.Evaluation
 evalF :: E.Focus -> EvState Proof
 evalF foc = isCan (E.toExpr foc) >>= \canFoc ->
             if canFoc 
-            then fail' ""
+            then fail' "Canonical expression"
             else evalToProof (E.toExpr foc) >>= \prf ->
                  getEnd' prf >>= \foc' ->
                  isCan (E.toExpr foc') >>= \canFoc' ->
@@ -32,10 +44,8 @@ evalF foc = isCan (E.toExpr foc) >>= \canFoc ->
                       return $ Trans beginCtx relEval foc foc' foc'' prf prf'
              
 
-evaluate = evalF . E.toFocus
-
 getEnd' :: Proof -> EvState E.Focus
-getEnd' = either (const $ fail' "") return . getEnd 
+getEnd' = either (const $ fail' "getEnd") return . getEnd 
                
 
 evalToProof :: PreExpr -> EvState Proof

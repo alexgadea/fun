@@ -1,0 +1,11 @@
+{-# Language OverloadedStrings #-}
+module Fun.Main where
+
+import Fun.Environment
+import Fun.Eval.Proof
+import Data.Text(pack)
+
+main :: String -> String -> IO ()
+main mod exp = testModule (pack mod) >>= 
+               either (error . show) 
+                      (\env -> putStrLn $ testEval env exp)

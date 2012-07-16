@@ -53,9 +53,9 @@ listIndex = (EquList.listIndex,[varN,varYS],exprListIndex)
 
 
 listLength :: OpDecl
-listLength = OpDecl EquList.listLength [varXS] lenFun
+listLength = OpDecl EquList.listLength [varYS] lenFun
     where lenFun :: PreExpr
-          lenFun = Case (Var varXS)
+          lenFun = Case (Var varYS)
                    [ (Con EquList.listEmpty,Con EquArith.natZero)
                    , (cons (Var varX) (Var varXS),suc (UnOp EquList.listLength (Var varXS)))
                    ]          

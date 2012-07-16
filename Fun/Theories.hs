@@ -12,4 +12,4 @@ import Fun.FunTheories.List
 import Fun.FunTheories.FOL
 
 
-funTheory = [arithTheory,folTheory,arithTheory]
+funTheory = [arithTheory,folTheory,listTheory]
