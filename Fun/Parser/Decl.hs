@@ -2,7 +2,7 @@
 module Fun.Parser.Decl where
 
 -- Imports de EQU.
-import Equ.Syntax(var, tRepr,Variable,VarName,FuncName,Func(..))
+import Equ.Syntax (var, tRepr,Variable(..),VarName,FuncName,Func(..))
 import qualified Equ.Parser as EquP ( Parser'
                                     , parsePreExpr,parseTyFromString
                                     , rel, proof
@@ -11,10 +11,11 @@ import qualified Equ.Parser as EquP ( Parser'
                                     , PProofState 
                                     , PExprState
                                     , pProofSet
+                                    , ParenFlag(UseParen)
                                     )
-import qualified Equ.PreExpr as PE ( PreExpr, PreExpr' (Var), PreExpr' (Fun)
+import qualified Equ.PreExpr as PE ( PreExpr, PreExpr' (Var)
                                    , toFocus,Focus,unParen
-                                   , listOfVar,listOfFun
+                                   , listOfVar
                                    , toExpr
                                    )
 import Equ.Types(Type, tyVarInternal)
@@ -49,8 +50,8 @@ import Fun.Declarations( Declarations
 import Fun.Parser.Internal
 
 -- Tipos para unificar la función de parseo para funciones y especificaciones.
-type S = (Func -> [Variable] -> PE.PreExpr -> SpecDecl)
-type F = (Func -> [Variable] -> PE.PreExpr -> Maybe Text -> FunDecl)
+type S = (Variable -> [Variable] -> PE.PreExpr -> SpecDecl)
+type F = (Variable -> [Variable] -> PE.PreExpr -> Maybe Text -> FunDecl)
 type UnifySF = Either S F
 
 -- | Calcula el tipo de una variable o funcion
@@ -58,12 +59,13 @@ setType :: Either VarName FuncName -> PDeclState -> (PDeclState,Type)
 setType name st = 
         if name `M.member` maps
             then (st, maps M.! name)
-            else (st {pVarTy = (n+1, M.insert name newvar maps)},newvar)
+            else (st {pVarTy = ((n+1, M.insert name newvar maps),flg)},newvar)
     where 
         maps :: M.Map (Either VarName FuncName) Type
-        maps = snd $ pVarTy st
+        maps = snd . fst $ pVarTy st
         n :: Int
-        n = fst $ pVarTy st
+        n = fst . fst $ pVarTy st
+        flg = snd $ pVarTy st
         newvar = tyVarInternal n
 
 -- | Actualiza el tipo de una variable.
@@ -77,12 +79,13 @@ updateTypeFun = updateTypeVF
 -- | Función general para actualizar tipos.
 updateTypeVF :: EitherName -> Type -> ParserD ()
 updateTypeVF ename ty = getState >>= \st -> 
-                       putState (st {pVarTy = (n st, ins st ename ty)})
+                        putState (st {pVarTy = ((n st, ins st ename ty),flg st)})
     where
         n :: PDeclState -> Int
-        n = fst . pVarTy
+        n = fst . fst . pVarTy
         maps :: PDeclState-> M.Map EitherName Type
-        maps = snd . pVarTy
+        maps = snd . fst . pVarTy
+        flg = snd . pVarTy
         ins :: PDeclState -> EitherName -> Type -> M.Map EitherName Type
         ins st ename ty = M.insert ename ty (maps st)
 
@@ -157,13 +160,13 @@ parseVar = try $ lexeme lexer ((:) <$> lower <*> many alphaNum) >>=
                   (setType (Left $ pack v) st))
 
 -- | Parser de función.
-parseFuncPreExpr :: ParserD Func
+parseFuncPreExpr :: ParserD Variable
 parseFuncPreExpr = try $ lexeme lexer ((:) <$> upper <*> many alphaNum) >>= 
                    \name -> fmap (setType (Right $ pack name)) getState >>=
                    \(st',t) -> putState st' >> return (makeFun name t)
     where
-        makeFun :: String -> Type -> Func
-        makeFun = Func . pack
+        makeFun :: String -> Type -> Variable
+        makeFun = Variable . pack
 
 -- | Parser general para funciones y especificaciones.
 {- | Comprobaciones al parsear:
@@ -174,15 +177,15 @@ parseFuncPreExpr = try $ lexeme lexer ((:) <$> upper <*> many alphaNum) >>=
 -}
 parseSF :: UnifySF -> ParserD ()
 parseSF ecnstr = parseFuncPreExpr >>= \fun -> 
-            parseFunWithType fun <|> parseFunWithoutType fun
+                 parseFunWithType fun <|> parseFunWithoutType fun
     where
-        parseFunWithoutType :: Func -> ParserD ()
+        parseFunWithoutType :: Variable -> ParserD ()
         parseFunWithoutType fun = do
             vs <- parseFunArgs
             case ecnstr of
                 Left cnstr -> parseS fun cnstr vs
                 Right cnstr -> parseF fun cnstr vs
-        parseFunWithType :: Func -> ParserD ()
+        parseFunWithType :: Variable -> ParserD ()
         parseFunWithType fun = try $
                 keyword ":" >>
                 parseFunType >>= \ty -> 
@@ -191,7 +194,7 @@ parseSF ecnstr = parseFuncPreExpr >>= \fun ->
                 if fun /= fun' 
                     then fail (show fun ++ " != " ++ show fun') 
                     else parseFunWithoutType fun'
-        parseF :: Func -> F -> [Variable] -> ParserD ()
+        parseF :: Variable -> F -> [Variable] -> ParserD ()
         parseF fun cnstr vs = do
             e <- parseExpr (Just vs) tryNewline
             st <- getState
@@ -199,7 +202,7 @@ parseSF ecnstr = parseFuncPreExpr >>= \fun ->
             putState (st {pDecls = envAddFun (pDecls st) (cnstr fun vs e mname)}) 
         parseTheoName :: ParserD (Maybe Text)
         parseTheoName = Just <$> (keywordDerivingFrom >> parseName)
-        parseS :: Func -> S -> [Variable] -> ParserD ()
+        parseS :: Variable -> S -> [Variable] -> ParserD ()
         parseS fun cnstr vs = do
             e <- parseExpr (Just vs) tryNewline
             st <- getState
@@ -315,6 +318,6 @@ parseFromStringDecl = runParser parseDecl initPState ""
 -- | Estado inicial del parser.
 initPState :: PDeclState
 initPState = PDeclState { pDecls = initDeclarations
-                        , pVarTy = EquP.initPExprState
-                        , pProofs = EquP.initPProofState
+                        , pVarTy = EquP.initPExprState EquP.UseParen
+                        , pProofs = EquP.initPProofState EquP.UseParen
                         }

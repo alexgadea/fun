@@ -51,7 +51,6 @@ getEnd' = either (const $ fail' "getEnd") return . getEnd
 evalToProof :: PreExpr -> EvState Proof
 evalToProof e@(Var _) = fail' "evalVar"
 evalToProof e@(Con _) = fail' "evalCon"
-evalToProof e@(Fun _) = fail' "evalFun"
 evalToProof e@(Paren _) = evalSubExpr e E.goDown
 evalToProof e@(UnOp op e') =  isCan e' >>= \cane' ->
                               if cane'
@@ -92,7 +91,7 @@ evalSubExpr e mv = maybe (fail' "EvalSubExpr")
           lastExpr = E.toExpr . fromRight . getEnd 
 
 fstToReduce :: PreExpr -> EvState (Maybe (E.Focus -> Maybe E.Focus))
-fstToReduce e@(App (Fun _) _) = maybe (return Nothing)
+fstToReduce e@(App (Var _) _) = maybe (return Nothing)
                                 (\foc ->  isCan (fst foc) >>= \canFoc -> 
                                          if canFoc then return Nothing else return $ Just E.goDownR)
                                 $ E.goDownR (toFocus e )

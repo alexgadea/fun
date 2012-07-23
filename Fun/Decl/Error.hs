@@ -10,12 +10,12 @@ type ErrInDecl d = ([DeclError],d)
 
 -- | Errores sobre las declaraciones.
 data DeclError = UndeclaredVar Variable
-               | UndeclaredFunc Func
+               | UndeclaredFunc Variable
                | InvalidPrgDeclaration
                | InvalidProofForThm ProofError
                | MultipleDeclaredVar Variable
-               | MultipleDeclaredFunc Func
-               | MultipleDeclaredSpec Func
+               | MultipleDeclaredFunc Variable
+               | MultipleDeclaredSpec Variable
                | MultipleDeclaredThm Text
                | MultipleDeclaredProp Text
     deriving Eq

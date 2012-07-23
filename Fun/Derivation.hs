@@ -60,7 +60,7 @@ checkDerivation d =
         checkStartExpr :: [DerivationError]
         checkStartExpr = do
                 let Fun f vs _ _ = prog d
-                let fWithArgs = foldl PE.preExprApp (PE.Fun f) (map PE.Var vs)
+                let fWithArgs = foldl PE.preExprApp (PE.Var f) (map PE.Var vs)
                 let Right ei = getStart prf
                 if fWithArgs == PE.toExpr ei 
                    then []
@@ -76,7 +76,7 @@ checkDerivation d =
                 let Right ctx = getCtx prf
                 let Right rel = getRel prf
                 let Spec f vs e = spec d
-                let fWithArgs = foldl PE.preExprApp (PE.Fun f) (map PE.Var vs)
+                let fWithArgs = foldl PE.preExprApp (PE.Var f) (map PE.Var vs)
                 let hyp = makeHypExpr rel fWithArgs e
                 if exprIsHypothesis hyp ctx
                    then []

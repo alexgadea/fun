@@ -10,7 +10,7 @@ import Equ.Expr
 import Data.Text hiding (map,all)
 
 -- | Declaraciones en Fun
-data SpecDecl = Spec Func [Variable] PE.PreExpr
+data SpecDecl = Spec Variable [Variable] PE.PreExpr
     deriving Show
 
 instance Eq SpecDecl where
@@ -28,7 +28,7 @@ data ThmDecl = Thm Theorem
 instance Eq ThmDecl where
     thm == thm' = getThmName thm == getThmName thm'
 
-data FunDecl = Fun Func [Variable] PE.PreExpr (Maybe Text) -- Puede tener la derivación o no.
+data FunDecl = Fun Variable [Variable] PE.PreExpr (Maybe Text) -- Puede tener la derivación o no.
     deriving Show
 
 instance Eq FunDecl where
@@ -58,7 +58,7 @@ getFunDerivingFrom :: FunDecl -> Maybe Text
 getFunDerivingFrom (Fun _ _ _ mt) = mt
 
 class Decl a where
-    getFuncDecl :: a -> Maybe Func
+    getFuncDecl :: a -> Maybe Variable
     getExprDecl :: a -> Maybe PE.PreExpr
     getVarsDecl :: a -> Maybe [Variable]
 

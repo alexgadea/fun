@@ -1,9 +1,9 @@
 
 module Fun.Declarations where
 
-import Equ.Syntax
-import qualified Equ.PreExpr as PE ( toFocus, PreExpr'(Var,Fun)
-                                   , listOfFun, listOfVar, Focus)
+import Equ.Syntax hiding (Func)
+import qualified Equ.PreExpr as PE ( toFocus, PreExpr'(Var)
+                                   , listOfVar, Focus)
 import Equ.Proof
 import Equ.Types
 
@@ -64,7 +64,7 @@ envAddProp env p = env {props = p : props env}
 valsDef :: Declarations -> [Variable]
 valsDef = L.map (\(Val v _) -> v) . vals
 
-funcsDef :: Declarations -> [Func]
+funcsDef :: Declarations -> [Variable]
 funcsDef = L.map (\(Fun f _ _ _) -> f) . functions
 
 checkSpecs :: Declarations -> [Either (ErrInDecl SpecDecl) SpecDecl]
@@ -144,10 +144,10 @@ checkDefVar d ds = lefts $
 
 checkDefFunc :: Decl d => d -> Declarations -> [DeclError]
 checkDefFunc d ds = lefts $
-            L.map (\(PE.Fun f, _) -> 
+            L.map (\(PE.Var f, _) -> 
                     if f `L.elem` funcsDef ds
                     then Right ()
-                    else Left $ UndeclaredFunc f) (PE.listOfFun $ getFocusDecl d)
+                    else Left $ UndeclaredFunc f) (PE.listOfVar $ getFocusDecl d)
 
 getFocusDecl :: Decl d => d -> PE.Focus
 getFocusDecl = PE.toFocus . fromJust . getExprDecl 

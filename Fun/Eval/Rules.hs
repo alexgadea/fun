@@ -6,8 +6,7 @@ import Fun.Environment
 import Fun.Theory
 
 
-import Equ.PreExpr hiding (PreExpr'(Fun))
-import qualified Equ.PreExpr as PE (PreExpr'(Fun))
+import Equ.PreExpr
 import Equ.Syntax
 import Equ.Matching
 
@@ -82,27 +81,27 @@ getResult :: Evaluation -> EvState PreExpr
 getResult = maybe (fail' "No result") return . result
 
 parApp :: PreExpr -> EvState Int
-parApp (PE.Fun f) = arity . fst' <$> findFun f
+parApp (Var f) = arity . varTy . fst' <$> findFun f
     where fst' (x,_,_) = x
 parApp (App e _) = flip (-) 1 <$> parApp e
 parApp _ = return 0
 
-parApp' :: PreExpr -> EvState (Maybe (Int,(Func,[Variable],PreExpr)))
-parApp' (PE.Fun f) = Just . (arity . fst' &&& id) <$> findFun f
+parApp' :: PreExpr -> EvState (Maybe (Int,(Variable,[Variable],PreExpr)))
+parApp' (Var f) = Just . (arity . varTy . fst' &&& id) <$> findFun f
     where fst' (x,_,_) = x
 parApp' (App e _) = fmap (first (flip (-) 1)) <$> parApp' e
 parApp' _ = return Nothing
 
 getArgs :: PreExpr -> Maybe [PreExpr]
-getArgs (PE.Fun _) = return []
-getArgs (App (PE.Fun _) e') = return [e']
-getArgs (App e e') = (e:) <$> getArgs e
+getArgs (Var _) = return []
+getArgs (App (Var _) e') = return [e']
+getArgs (App e e') = (e':) <$> getArgs e
 getArgs _ = Nothing
 
-findFunDecl :: Func -> FunDecl -> Bool
+findFunDecl :: Variable -> FunDecl -> Bool
 findFunDecl f (Fun f' _ _ _) = f == f'
 
-findFun :: Func -> EvState (Func,[Variable],PreExpr)
+findFun :: Variable -> EvState (Variable,[Variable],PreExpr)
 findFun f = getEnv >>= maybe (fail' $ "Function not declared: " ++ show f) getDecl
             . find (findFunDecl f) 
             . decls
@@ -135,7 +134,6 @@ isCan e = (fromMaybe False . canonical) <$> getTheories
 
 isCanonical :: PreExpr -> IndType -> Maybe Bool
 isCanonical (Var _) _ = return True
-isCanonical(PE.Fun _) _ = return True
 isCanonical (Con c) ty = return $ c `elem` constants ty
 isCanonical (UnOp op e) ty = (isConstructor ty op &&) <$> case opTy op of
                                t1 :-> _ -> getType e >>=
@@ -161,7 +159,6 @@ isCanonical _ _ = return False
 
 
 isNeutral :: PreExpr -> IndType -> Maybe Bool
-isNeutral (PE.Fun _) _ = return False
 isNeutral (UnOp op _) t = return $ isConstructor t op
 isNeutral (BinOp op _ _) t = return $ isConstructor t op
 isNeutral (App e e') t = case getType e of
