@@ -23,8 +23,6 @@ import Fun.Declarations
 
 type TextFilePath = Text
 
-type EitherName = Either VarName FuncName
-
 data PDeclState = PDeclState { pDecls :: Declarations
                              , pVarTy :: EquP.PExprState
                              , pProofs :: EquP.PProofState

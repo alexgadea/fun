@@ -11,6 +11,9 @@ import qualified Equ.Parser as EquP ( Parser'
                                     , PProofState 
                                     , PExprState
                                     , pProofSet
+                                    , parserSetType
+                                    , parserUpdateType
+                                    , EitherName
                                     , ParenFlag(UseParen)
                                     )
 import qualified Equ.PreExpr as PE ( PreExpr, PreExpr' (Var)
@@ -55,39 +58,24 @@ type F = (Variable -> [Variable] -> PE.PreExpr -> Maybe Text -> FunDecl)
 type UnifySF = Either S F
 
 -- | Calcula el tipo de una variable o funcion
-setType :: Either VarName FuncName -> PDeclState -> (PDeclState,Type)
-setType name st = 
-        if name `M.member` maps
-            then (st, maps M.! name)
-            else (st {pVarTy = ((n+1, M.insert name newvar maps),flg)},newvar)
-    where 
-        maps :: M.Map (Either VarName FuncName) Type
-        maps = snd . fst $ pVarTy st
-        n :: Int
-        n = fst . fst $ pVarTy st
-        flg = snd $ pVarTy st
-        newvar = tyVarInternal n
+setType :: EquP.EitherName -> PDeclState -> (PDeclState,Type)
+setType name st = let (vst, t) = EquP.parserSetType name (pVarTy st)
+                    in
+                    (st {pVarTy = vst},t)
 
 -- | Actualiza el tipo de una variable.
-updateTypeVar :: EitherName -> Type -> ParserD ()
+updateTypeVar :: EquP.EitherName -> Type -> ParserD ()
 updateTypeVar = updateTypeVF
 
 -- | Actualiza el tipo de una función.
-updateTypeFun :: EitherName -> Type -> ParserD ()
+updateTypeFun :: EquP.EitherName -> Type -> ParserD ()
 updateTypeFun = updateTypeVF
 
 -- | Función general para actualizar tipos.
-updateTypeVF :: EitherName -> Type -> ParserD ()
-updateTypeVF ename ty = getState >>= \st -> 
-                        putState (st {pVarTy = ((n st, ins st ename ty),flg st)})
-    where
-        n :: PDeclState -> Int
-        n = fst . fst . pVarTy
-        maps :: PDeclState-> M.Map EitherName Type
-        maps = snd . fst . pVarTy
-        flg = snd . pVarTy
-        ins :: PDeclState -> EitherName -> Type -> M.Map EitherName Type
-        ins st ename ty = M.insert ename ty (maps st)
+updateTypeVF :: EquP.EitherName -> Type -> ParserD ()
+updateTypeVF ename ty = 
+            getState >>= \st -> 
+            putState (st {pVarTy = EquP.parserUpdateType ename ty (pVarTy st)})
 
 -- | Uso del parser de una expresión definido en 'Equ.Parser.Expr'.
 -- TODO Ale: No esta bonito como manejamos el pasaje de errores con pass
