@@ -7,7 +7,7 @@ import Fun.Theory
 
 
 import Equ.PreExpr
-import Equ.Syntax
+import Equ.Syntax 
 import Equ.Matching
 
 import Equ.TypeChecker(getType,unificate)
@@ -44,6 +44,7 @@ type EvalM = Either String
 -- en un mapeo de patrones a expresiones.
 
 data Env = Env { decls :: [FunDecl] }
+         deriving Show
 
 -- | Una aplicación parcial de una función a varios argumentos.
 type PartialApp = (Func,[PreExpr])
@@ -102,9 +103,9 @@ findFunDecl :: Variable -> FunDecl -> Bool
 findFunDecl f (Fun f' _ _ _) = f == f'
 
 findFun :: Variable -> EvState (Variable,[Variable],PreExpr)
-findFun f = getEnv >>= maybe (fail' $ "Function not declared: " ++ show f) getDecl
+findFun f = getEnv >>= \env -> (maybe (fail' $ "Function not declared: " ++ show f ++ show env) getDecl
             . find (findFunDecl f) 
-            . decls
+            . decls) env
     where getDecl (Fun f vs e _) = return (f,vs,e)
 
 findOpDecl :: Operator -> EvState ([Variable],PreExpr)
@@ -134,6 +135,7 @@ isCan e = (fromMaybe False . canonical) <$> getTheories
 
 isCanonical :: PreExpr -> IndType -> Maybe Bool
 isCanonical (Var _) _ = return True
+isCanonical (Paren e) ty = isCanonical e ty
 isCanonical (Con c) ty = return $ c `elem` constants ty
 isCanonical (UnOp op e) ty = (isConstructor ty op &&) <$> case opTy op of
                                t1 :-> _ -> getType e >>=
@@ -155,6 +157,7 @@ isCanonical(App e e') ty = case getType e of
                                                  unificate t1 >>= \t1' ->
                                                  liftToIndType (isCanonical e') t1' `and'`
                                                  liftToIndType (isNeutral e) (t1 :-> t2)
+                              Just t -> return False
 isCanonical _ _ = return False
 
 

@@ -6,6 +6,6 @@ import Fun.Eval.Proof
 import Data.Text(pack)
 
 main :: String -> String -> IO ()
-main mod exp = testModule (pack mod) >>= 
+main mod exp = testModule (pack mod) >>=                
                either (error . show) 
-                      (\env -> putStrLn $ testEval env exp)
+                      (putStrLn . flip testEval exp)

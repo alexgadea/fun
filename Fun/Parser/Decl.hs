@@ -130,6 +130,7 @@ parseLet s parse = try $ do many newline
 parseBeginProof :: ParserD () -> ParserD ()
 parseBeginProof parse = try $ do 
                         many newline
+                        optional lineComment 
                         keywordBegin
                         keywordProof
                         parse
@@ -149,7 +150,7 @@ parseVar = try $ lexeme lexer ((:) <$> lower <*> many alphaNum) >>=
 
 -- | Parser de función.
 parseFuncPreExpr :: ParserD Variable
-parseFuncPreExpr = try $ lexeme lexer ((:) <$> upper <*> many alphaNum) >>= 
+parseFuncPreExpr = try $ lexeme lexer ((:) <$> lower <*> many alphaNum) >>= 
                    \name -> fmap (setType (Right $ pack name)) getState >>=
                    \(st',t) -> putState st' >> return (makeFun name t)
     where

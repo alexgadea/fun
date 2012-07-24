@@ -13,10 +13,13 @@ import Data.Either (lefts)
 import qualified Data.List as L (map,elem,filter,notElem,nub)
 import Data.Text (unpack,pack)
 
+import Control.Applicative ((<$>))
+import Control.Arrow ((***))
 import Control.Monad (foldM)
 import Control.Monad.Identity  
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.State (StateT,get,put,runStateT)
+import Control.Monad.State (StateT,get,put,runStateT,modify)
+
 
 -- | Environment es el conjunto de módulos que se tienen cargados en un momento dado
 --   en Fun. Cada vez que se hace un import desde un módulo, debe referirse a un
@@ -71,6 +74,7 @@ checkModule m = do
     if m `L.elem` snd st 
         then return Nothing 
         else do
+
     
     let mImports = L.map (\(Import mn) -> mn) $ imports m
     let msWithm = addImportedModule (modName m) mImports $ fst st
@@ -88,7 +92,8 @@ checkModule m = do
         then return isValidLoad 
         else do
     
-    env <- fmap snd get
+    env <- snd <$> get
+
     let moduleDecls = extractDeclImported m env
     
     let invalidSpec = lefts $ checkSpecs moduleDecls
@@ -96,11 +101,10 @@ checkModule m = do
     let invalidVals = lefts $ checkVals  moduleDecls
     let invalidThm  = lefts $ checkThm   moduleDecls
     let invalidDers = lefts $ L.map checkDerivation $ derivations m
-    
+
     case (invalidSpec, invalidFuns, invalidVals, invalidThm, invalidDers) of
-        ([],[],[],[],[]) -> get >>= \(mns,env) -> 
-                            put (mns, addModuleEnv m env) >>
-                            return Nothing
+        ([],[],[],[],[]) -> modify (id *** addModuleEnv m) >> 
+                           return Nothing
         mErrs -> return . Just $ createError (modName m) mErrs
 
 extractDeclImported :: Module -> Environment -> Declarations
@@ -136,7 +140,7 @@ testModule mod = do
        mParsedM <- liftIO $ parseFromFileModule mod
        either (return . Left) 
               (\m -> do
-                (res,(_,env)) <- runStateT (checkModule m) initStateCM 
+                (_,(_,env)) <- runStateT (checkModule m) initStateCM 
                 return $ Right env
               ) mParsedM
 

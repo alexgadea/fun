@@ -14,10 +14,11 @@ import Fun.Decl.Error
 import Equ.IndType
 
 import qualified Data.Map as M
-import Data.Text hiding (map,concatMap)
+import Data.Text hiding (map,concatMap,unlines)
 import qualified Data.List as L (map,elem,delete,filter)
 import Data.Either (lefts)
 import Data.Maybe (fromJust,fromMaybe)
+
 
 data Declarations = Declarations {
                    specs     :: [SpecDecl]
@@ -40,11 +41,13 @@ concatDeclarations d d' = Declarations
                             (indTypes d ++ indTypes d')
 
 instance Show Declarations where
-    show decls = "\nSpecs " ++ show (specs decls) ++ "\n" ++
-                 "Funs " ++ show (functions decls) ++ "\n" ++
-                 "Thms " ++ show (theorems decls) ++ "\n" ++
-                 "Props " ++ show (props decls) ++ "\n" ++
-                 "Vals " ++ show (vals decls)
+    show decls = unlines [ ""
+                         , "Specs: " ++ show (specs decls)
+                         , "Funs:  " ++ show (functions decls) 
+                         , "Thms:  " ++ show (theorems decls) 
+                         , "Props: " ++ show (props decls) 
+                         , "Vals:  " ++ show (vals decls)
+                         ]
             
 envAddFun :: Declarations -> FunDecl -> Declarations
 envAddFun env f = env {functions = f : functions env}
@@ -68,12 +71,11 @@ funcsDef :: Declarations -> [Variable]
 funcsDef = L.map (\(Fun f _ _ _) -> f) . functions
 
 checkSpecs :: Declarations -> [Either (ErrInDecl SpecDecl) SpecDecl]
-checkSpecs ds = checkDoubleDef specsDefs mErr ++
-                L.map (\spec -> 
-                case (checkDefVar spec ds, checkDefFunc spec ds) of
-                    ([],[]) -> Right spec
-                    (vErrs,fErrs) -> Left (vErrs ++ fErrs, spec)) specsDefs
+checkSpecs ds = checkDoubleDef specsDefs mErr ++ L.map checkSpec specsDefs
     where
+        checkSpec spec = case checkDefVar spec ds ++ checkDefFunc spec ds of
+                           [] -> Right spec
+                           errors -> Left (errors,spec)
         specsDefs :: [SpecDecl]
         specsDefs = specs ds
         mErr :: SpecDecl -> Either (ErrInDecl SpecDecl) SpecDecl
@@ -128,9 +130,8 @@ checkVals ds =  checkDoubleDef valsDefs mErr ++
 
 checkDoubleDef :: (Decl d, Eq d) => [d] -> (d -> Either (ErrInDecl d) d) -> 
                                     [Either (ErrInDecl d) d]
-checkDoubleDef decls mErr = L.filter (\d -> case d of
-                                            Left err -> True
-                                            _ -> False) $ L.map mErr decls
+checkDoubleDef decls mErr = L.filter isLeft $ L.map mErr decls
+    where isLeft = either (const True) (const False)
 
 checkDefVar :: Decl d => d -> Declarations -> [DeclError]
 checkDefVar d ds = lefts $ 
