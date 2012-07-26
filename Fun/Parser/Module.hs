@@ -25,10 +25,10 @@ parseModule = do
             return $ Module mName imports (pDecls st) ders
     where
         parseComments :: ParserD ()
-        parseComments = many (  lineComment 
-                            <|> blockComment 
-                            <|> tryNewline
-                             ) >> return ()
+        parseComments = many1 ( lineComment 
+                             <|> blockComment 
+                             <|> tryNewline
+                              ) >> return ()
 
 parseFromStringModule :: String -> Either ParseError Module
 parseFromStringModule = runParser parseModule initPState ""

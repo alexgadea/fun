@@ -91,7 +91,7 @@ checkFuns ds =
         ([],[],True) -> Right fun
         (vErrs,fErrs,isP) -> Left $ if isP 
                                   then (vErrs ++ fErrs, fun)
-                                  else (vErrs ++ fErrs ++ [InvalidPrgDeclaration], fun) 
+                                  else (vErrs ++ fErrs ++ [InvalidPrgDeclaration], fun)
           ) funsDefs
     where
         funsDefs :: [FunDecl]
@@ -113,7 +113,7 @@ checkThm ds =  checkDoubleDef thmDefs mErr ++
         mErr thm = if thm `L.elem` L.delete thm thmDefs
                     then Left ([MultipleDeclaredThm $ getThmName thm],thm)
                     else Right thm
-        
+
 checkVals :: Declarations -> [Either (ErrInDecl ValDecl) ValDecl]
 checkVals ds =  checkDoubleDef valsDefs mErr ++
                 L.map (\val -> 
@@ -123,6 +123,8 @@ checkVals ds =  checkDoubleDef valsDefs mErr ++
     where
         valsDefs :: [ValDecl]
         valsDefs = vals ds
+        funDefs :: [FunDecl]
+        funDefs = functions ds
         mErr :: ValDecl -> Either (ErrInDecl ValDecl) ValDecl
         mErr val@(Val v _) = if val `L.elem` L.delete val valsDefs
                                 then Left ([MultipleDeclaredVar v],val)

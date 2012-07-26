@@ -14,7 +14,6 @@ import Fun.Derivation.Derivation
 import Fun.Derivation.Monad
 import Fun.Derivation.Error
 
-
 import Equ.Expr
 import Equ.Proof
 import Equ.Rule

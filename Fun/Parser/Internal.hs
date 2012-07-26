@@ -24,7 +24,7 @@ import Fun.Declarations
 type TextFilePath = Text
 
 data PDeclState = PDeclState { pDecls :: Declarations
-                             , pVarTy :: EquP.PExprState
+                             , pExprs :: EquP.PExprState
                              , pProofs :: EquP.PProofState
                              }
 

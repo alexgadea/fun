@@ -103,8 +103,7 @@ checkModule m = do
     let invalidDers = lefts $ L.map checkDerivation $ derivations m
 
     case (invalidSpec, invalidFuns, invalidVals, invalidThm, invalidDers) of
-        ([],[],[],[],[]) -> modify (id *** addModuleEnv m) >> 
-                           return Nothing
+        ([],[],[],[],[]) -> modify (id *** addModuleEnv m) >> return Nothing
         mErrs -> return . Just $ createError (modName m) mErrs
 
 extractDeclImported :: Module -> Environment -> Declarations
@@ -135,13 +134,13 @@ loadModules = foldM (\may mn ->
                         mParsedM <- liftIO $ parseFromFileModule mn
                         either (return . Just) checkModule mParsedM) Nothing
 
-testModule :: ModName -> IO (Either ModuleError Environment)
-testModule mod = do
+loadMainModule :: ModName -> IO (Either ModuleError Environment)
+loadMainModule mod = do
        mParsedM <- liftIO $ parseFromFileModule mod
        either (return . Left) 
               (\m -> do
-                (_,(_,env)) <- runStateT (checkModule m) initStateCM 
-                return $ Right env
+                (mErr,st) <- runStateT (checkModule m) initStateCM 
+                maybe (return $ Right $ snd st) (return . Left) mErr
               ) mParsedM
 
 -- Queries for environments
