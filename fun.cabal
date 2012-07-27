@@ -14,18 +14,33 @@ Build-type:          Simple
 Bug-reports:         https://github.com/alexgadea/fun/issues
 
 Library
-    Exposed-modules:        Fun.Theories, 
-                            Fun.Environment, 
-                            Fun.Theory, 
-                            Fun.Decl, 
-                            Fun.Module, 
-                            Fun.Parser.Decl, 
-                            Fun.FunTheories.FOL, 
+    Exposed-modules:        Fun.Decl,
+                            Fun.Decl.Error,
+                            Fun.Declarations,
+                            Fun.Derivation,
+                            Fun.Derivation.Derivation,
+                            Fun.Derivation.Error,
+                            Fun.Derivation.Monad,
+                            Fun.Eval.Proof,
+                            Fun.Eval.Rules,
                             Fun.FunTheories.Arith, 
-                            Fun.FunTheories.List
+                            Fun.FunTheories.FOL, 
+                            Fun.FunTheories.List,
+                            Fun.Environment, 
+                            Fun.Module,
+                            Fun.Module.Error,
+                            Fun.Main,
+                            Fun.Parser, 
+                            Fun.Parser.Decl,
+                            Fun.Parser.Import,
+                            Fun.Parser.Internal,
+                            Fun.Parser.Module,
+                            Fun.Theories, 
+                            Fun.Theory
+                            
 
     Build-depends:          base >= 4.2, text >= 0.11.1.5, 
                             containers >= 0.4.0.0, equ >= 0.2, mtl >= 2.0.1.0,
-                            parsec >= 3.1.1, transformers >= 0.3.0
+                            parsec >= 3.1.1, transformers >= 0.2.2.0
     
     GHC-Options:         -Odph -Wall

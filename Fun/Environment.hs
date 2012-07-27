@@ -143,6 +143,15 @@ loadMainModule mod = do
                 maybe (return $ Right $ snd st) (return . Left) mErr
               ) mParsedM
 
+loadMainModuleFromString :: String -> IO (Either ModuleError Environment)
+loadMainModuleFromString s = do
+       let mParsedM = parseFromStringModule s
+       either (return . Left . ModuleParseError) 
+              (\m -> do
+                (mErr,st) <- runStateT (checkModule m) initStateCM 
+                maybe (return $ Right $ snd st) (return . Left) mErr
+              ) mParsedM
+
 -- Queries for environments
 getFuncs :: Environment -> [FunDecl]
 getFuncs = concatMap (functions . decls)
