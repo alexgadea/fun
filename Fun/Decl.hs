@@ -26,7 +26,7 @@ data ThmDecl = Thm Theorem
     deriving Show
 
 instance Eq ThmDecl where
-    thm == thm' = getThmName thm == getThmName thm'
+    thm == thm' = getNameDecl thm == getNameDecl thm'
 
 data FunDecl = Fun Variable [Variable] PE.PreExpr (Maybe Text) -- Puede tener la derivación o no.
     deriving Show
@@ -51,43 +51,47 @@ instance Eq OpDecl where
 data TypeDecl = NewType Type [Constant] [(Operator,[Variable],PE.PreExpr)] -- Para implementar a futuro.
     deriving (Eq,Show)
 
-getThmName :: ThmDecl -> Text
-getThmName (Thm t) = truthName t
-
 getFunDerivingFrom :: FunDecl -> Maybe Text
 getFunDerivingFrom (Fun _ _ _ mt) = mt
 
 class Decl a where
+    getNameDecl :: a -> Text
     getFuncDecl :: a -> Maybe Variable
     getExprDecl :: a -> Maybe PE.PreExpr
     getVarsDecl :: a -> Maybe [Variable]
 
 instance Decl SpecDecl where
+    getNameDecl (Spec f _ _) = tRepr f
     getFuncDecl (Spec f _ _) = Just f
     getExprDecl (Spec _ _ e) = Just e
     getVarsDecl (Spec _ vs _) = Just vs
     
 instance Decl PropDecl where
+    getNameDecl (Prop t _) = t
     getFuncDecl _ = Nothing
     getExprDecl (Prop _ e) = Just e
     getVarsDecl _ = Nothing
     
 instance Decl ThmDecl where
+    getNameDecl (Thm t) =  truthName t
     getFuncDecl _ = Nothing
     getExprDecl (Thm t) = let (Expr p) = thExpr t in Just p
     getVarsDecl _ = Nothing
     
 instance Decl FunDecl where
+    getNameDecl (Fun f _ _ _) =  tRepr f
     getFuncDecl (Fun f _ _ _) = Just f
     getExprDecl (Fun _ _ p _) = Just p
     getVarsDecl (Fun _ vs _ _) = Just vs
     
 instance Decl ValDecl where
+    getNameDecl (Val v _) =  tRepr v
     getFuncDecl _ = Nothing
     getExprDecl (Val _ p) = Just p
     getVarsDecl _ = Nothing
     
 instance Decl TypeDecl where
+    getNameDecl _ =  pack ""
     getFuncDecl _ = Nothing
     getExprDecl _ = Nothing
     getVarsDecl _ = Nothing

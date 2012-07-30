@@ -111,7 +111,7 @@ checkThm ds =  checkDoubleDef thmDefs mErr ++
         thmDefs = theorems ds
         mErr :: ThmDecl -> Either (ErrInDecl ThmDecl) ThmDecl
         mErr thm = if thm `L.elem` L.delete thm thmDefs
-                    then Left ([MultipleDeclaredThm $ getThmName thm],thm)
+                    then Left ([MultipleDeclaredThm $ getNameDecl thm],thm)
                     else Right thm
 
 checkVals :: Declarations -> [Either (ErrInDecl ValDecl) ValDecl]

@@ -43,7 +43,7 @@ createDerivations decls = do
         equalFun s f = getFuncDecl s == getFuncDecl f &&
                        getVarsDecl s == getVarsDecl f
         equalThm :: FunDecl -> ThmDecl -> Bool
-        equalThm f t = (Just $ getThmName t) == getFunDerivingFrom f
+        equalThm f t = (Just $ getNameDecl t) == getFunDerivingFrom f
 
 -- | Funcion que dada una derivacion dice si es válida o no.
 --checkDerivation :: Derivation -> DM Derivation
