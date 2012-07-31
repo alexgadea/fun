@@ -112,12 +112,12 @@ findOpDecl :: Operator -> EvState ([Variable],PreExpr)
 findOpDecl op = getTheories >>= maybe (errOpNotInEnv op) return . lookupOp op . concatMap operators
 
 matching :: PreExpr -> PreExpr -> PreExpr -> Maybe PreExpr
-matching e p r = either (const Nothing) (return . applySubst r) $ match p e
+matching e p r = either (const Nothing) (return . applySubst r . fst) $ match p e
 
 matchCouple :: (PreExpr,PreExpr) -> (PreExpr,PreExpr,PreExpr) -> Maybe PreExpr
 matchCouple (e,e') (p,p',res) = case subst of 
                                   Left _ -> Nothing
-                                  Right s -> return $ applySubst res s
+                                  Right s -> return $ applySubst res (fst s)
     where subst = match p e >>= matchWithSubst p' e'                               
 
 firstMatching :: PreExpr -> [(PreExpr,PreExpr)] -> EvState PreExpr
