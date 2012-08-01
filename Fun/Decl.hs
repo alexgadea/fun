@@ -40,13 +40,11 @@ data ValDecl = Val Variable PE.PreExpr
 instance Eq ValDecl where
     (Val v _) == (Val v' _) = v == v'
 
-
 data OpDecl = OpDecl Operator [Variable] PE.PreExpr
     deriving Show
 
 instance Eq OpDecl where
     (OpDecl op _ _) == (OpDecl op' _ _) = op == op'
-
 
 data TypeDecl = NewType Type [Constant] [(Operator,[Variable],PE.PreExpr)] -- Para implementar a futuro.
     deriving (Eq,Show)

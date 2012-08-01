@@ -18,14 +18,19 @@ import Data.Text hiding (map,concatMap,unlines)
 import qualified Data.List as L (map,elem,delete,filter)
 import Data.Either (lefts)
 import Data.Maybe (fromJust,fromMaybe)
+import Text.Parsec.Pos
 
+data DeclPos = DeclPos { begin :: SourcePos
+                       , end   :: SourcePos
+                       }
+    deriving Show
 
 data Declarations = Declarations {
-                   specs     :: [SpecDecl]
-                 , functions :: [FunDecl]
-                 , theorems  :: [ThmDecl]
-                 , props     :: [PropDecl]
-                 , vals      :: [ValDecl]
+                   specs     :: [(DeclPos,SpecDecl)]
+                 , functions :: [(DeclPos,FunDecl)]
+                 , theorems  :: [(DeclPos,ThmDecl)]
+                 , props     :: [(DeclPos,PropDecl)]
+                 , vals      :: [(DeclPos,ValDecl)]
                  , indTypes  :: [(Type,IndType)] -- Si luego extendemos para declarar tipos, este campo del environment va agregando cada uno de
                                            -- los nuevos tipos declarados. Por ahora usaremos solo el valor inicial que le pasamos,
                                            -- el cual contiene los tipos basicos de Equ.
@@ -49,26 +54,26 @@ instance Show Declarations where
                          , "Vals:  " ++ show (vals decls)
                          ]
             
-envAddFun :: Declarations -> FunDecl -> Declarations
+envAddFun :: Declarations -> (DeclPos,FunDecl) -> Declarations
 envAddFun env f = env {functions = f : functions env}
 
-envAddSpec :: Declarations -> SpecDecl -> Declarations
+envAddSpec :: Declarations -> (DeclPos,SpecDecl) -> Declarations
 envAddSpec env s = env {specs = s : specs env} 
 
-envAddVal :: Declarations -> ValDecl -> Declarations
+envAddVal :: Declarations -> (DeclPos,ValDecl) -> Declarations
 envAddVal env v = env {vals = v : vals env}
 
-envAddTheorem :: Declarations -> ThmDecl -> Declarations
+envAddTheorem :: Declarations -> (DeclPos,ThmDecl) -> Declarations
 envAddTheorem env p = env {theorems = p : theorems env} 
 
-envAddProp :: Declarations -> PropDecl -> Declarations
+envAddProp :: Declarations -> (DeclPos,PropDecl) -> Declarations
 envAddProp env p = env {props = p : props env} 
 
 valsDef :: Declarations -> [Variable]
-valsDef = L.map (\(Val v _) -> v) . vals
+valsDef = L.map (\(_,Val v _) -> v) . vals
 
 funcsDef :: Declarations -> [Variable]
-funcsDef = L.map (\(Fun f _ _ _) -> f) . functions
+funcsDef = L.map (\(_,Fun f _ _ _) -> f) . functions
 
 checkSpecs :: Declarations -> [Either (ErrInDecl SpecDecl) SpecDecl]
 checkSpecs ds = checkDoubleDef specsDefs mErr ++ L.map checkSpec specsDefs
@@ -77,7 +82,7 @@ checkSpecs ds = checkDoubleDef specsDefs mErr ++ L.map checkSpec specsDefs
                            [] -> Right spec
                            errors -> Left (errors,spec)
         specsDefs :: [SpecDecl]
-        specsDefs = specs ds
+        specsDefs = map snd $ specs ds
         mErr :: SpecDecl -> Either (ErrInDecl SpecDecl) SpecDecl
         mErr spec@(Spec f _ _) = if spec `L.elem` L.delete spec specsDefs
                                     then Left ([MultipleDeclaredFunc f],spec)
@@ -95,7 +100,7 @@ checkFuns ds =
           ) funsDefs
     where
         funsDefs :: [FunDecl]
-        funsDefs = functions ds
+        funsDefs = map snd $ functions ds
         mErr :: FunDecl -> Either (ErrInDecl FunDecl) FunDecl
         mErr fun@(Fun f _ _ _) = if fun `L.elem` L.delete fun funsDefs
                                     then Left ([MultipleDeclaredFunc f],fun)
@@ -108,7 +113,7 @@ checkThm ds =  checkDoubleDef thmDefs mErr ++
                 (validateProof (thProof p))) thmDefs
     where
         thmDefs :: [ThmDecl]
-        thmDefs = theorems ds
+        thmDefs = map snd $ theorems ds
         mErr :: ThmDecl -> Either (ErrInDecl ThmDecl) ThmDecl
         mErr thm = if thm `L.elem` L.delete thm thmDefs
                     then Left ([MultipleDeclaredThm $ getNameDecl thm],thm)
@@ -122,9 +127,9 @@ checkVals ds =  checkDoubleDef valsDefs mErr ++
                     (vErrs,fErrs) -> Left (vErrs ++ fErrs, val)) valsDefs
     where
         valsDefs :: [ValDecl]
-        valsDefs = vals ds
+        valsDefs = map snd $ vals ds
         funDefs :: [FunDecl]
-        funDefs = functions ds
+        funDefs = map snd $ functions ds
         mErr :: ValDecl -> Either (ErrInDecl ValDecl) ValDecl
         mErr val@(Val v _) = if val `L.elem` L.delete val valsDefs
                                 then Left ([MultipleDeclaredVar v],val)
@@ -171,8 +176,12 @@ initDeclarations :: Declarations
 initDeclarations = Declarations {
                     functions = []
                   , specs = []
-                  , theorems = map Thm initTheorems
+                  , theorems = map (\t -> (initDeclPos,Thm t)) initTheorems
                   , props = []
                   , vals = []
                   , indTypes = mapIndTypes
                 }
+    where
+        initDeclPos = DeclPos initPosThms initPosThms
+        initPosThms = newPos "TeoremasIniciales" 0 0
+        

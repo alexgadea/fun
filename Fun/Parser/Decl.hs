@@ -46,7 +46,7 @@ import Control.Applicative ((<$>),(<*>))
 
 -- Imports Fun.
 import Fun.Decl
-import Fun.Declarations( Declarations
+import Fun.Declarations( Declarations, DeclPos (..)
                       , vals, functions, props, specs
                       , envAddFun, envAddVal, envAddProp
                       , envAddSpec, envAddTheorem
@@ -136,36 +136,41 @@ parseFuncPreExpr = EquP.parseVariable
         que este entre las variables de los argumentos.
 -}
 parseSF :: UnifySF -> ParserD ()
-parseSF ecnstr = parseFuncPreExpr >>= \fun -> 
-                 parseFunWithType fun <|> parseFunWithoutType fun
+parseSF ecnstr = getParserState >>= \state -> parseFuncPreExpr >>= \fun -> 
+                 (\pst ->   parseFunWithType fun pst 
+                        <|> parseFunWithoutType fun pst) (statePos state)
     where
-        parseFunWithoutType :: Variable -> ParserD ()
-        parseFunWithoutType fun = do
+        parseFunWithoutType :: Variable -> SourcePos -> ParserD ()
+        parseFunWithoutType fun beginPos = do
             vs <- parseFunArgs
             case ecnstr of
-                Left cnstr -> parseS fun cnstr vs
-                Right cnstr -> parseF fun cnstr vs
-        parseFunWithType :: Variable -> ParserD ()
-        parseFunWithType fun = try $
+                Left cnstr -> parseS fun cnstr vs beginPos
+                Right cnstr -> parseF fun cnstr vs beginPos
+        parseFunWithType :: Variable -> SourcePos -> ParserD ()
+        parseFunWithType fun beginPos = try $
                 keyword ":" >>
                 parseFunType >>= \ty -> 
                 parseFuncPreExpr >>= \fun' ->
                 if fun /= fun' 
                     then fail (show fun ++ " != " ++ show fun') 
-                    else parseFunWithoutType (var (tRepr fun) ty)
-        parseF :: Variable -> F -> [Variable] -> ParserD ()
-        parseF fun cnstr vs = do
+                    else parseFunWithoutType (var (tRepr fun) ty) beginPos
+        parseF :: Variable -> F -> [Variable] -> SourcePos -> ParserD ()
+        parseF fun cnstr vs beginPos = do
             e <- parseExpr (Just vs) tryNewline
             mname <- (parseTheoName <|> return Nothing)
+            state <- getParserState
+            let declPos = DeclPos beginPos $ statePos state
             modifyState (\st -> 
-                    st {pDecls = envAddFun (pDecls st) (cnstr fun vs e mname)}) 
+                    st {pDecls = envAddFun (pDecls st) (declPos,cnstr fun vs e mname)}) 
         parseTheoName :: ParserD (Maybe Text)
         parseTheoName = Just <$> (keywordDerivingFrom >> parseName)
-        parseS :: Variable -> S -> [Variable] -> ParserD ()
-        parseS fun cnstr vs = do
+        parseS :: Variable -> S -> [Variable] -> SourcePos -> ParserD ()
+        parseS fun cnstr vs beginPos = do
             e <- parseExpr (Just vs) tryNewline
+            state <- getParserState
+            let declPos = DeclPos beginPos $ statePos state
             modifyState (\st -> 
-                    st {pDecls = envAddSpec (pDecls st) (cnstr fun vs e)})
+                    st {pDecls = envAddSpec (pDecls st) (declPos,cnstr fun vs e)})
         parseFunArgs :: ParserD [Variable]
         parseFunArgs = manyTill parseVar (try $ string "=")
 
@@ -214,10 +219,15 @@ parseProof till = do
 -- TODO: Mejorar el informe de errores.
 parseThm :: ParserD ()
 parseThm = do
+    state <- getParserState
+    let beginPos = statePos state
     name <- parseName
     p <- parseProof (try $ keywordEnd >> keywordProof)
+    state <- getParserState
+    let endPos = statePos state
+    let declPos = DeclPos beginPos endPos
     let declThm = Thm $ createTheorem name p
-    modifyState (\st -> st { pDecls = envAddTheorem (pDecls st) declThm
+    modifyState (\st -> st { pDecls = envAddTheorem (pDecls st) (declPos,declThm)
                            , pProofs = addTheorem (pProofs st) name p
                            })
 
@@ -237,27 +247,37 @@ addTheorem pst pn p =
         func/spec deben estar declaradas antes.
 -}
 parseVal :: ParserD ()
-parseVal = parseVar >>= \v -> parseVarWithoutType v <|> parseVarWithType v
+parseVal = parseVar >>= \v -> getParserState >>= \state ->
+           (\pst -> parseVarWithoutType v pst 
+                <|> parseVarWithType v pst) (statePos state) 
     where 
-        parseVarWithoutType :: Variable -> ParserD ()
-        parseVarWithoutType v = try $
+        parseVarWithoutType :: Variable -> SourcePos -> ParserD ()
+        parseVarWithoutType v beginPos = try $
                 keyword "=" >> parseExpr Nothing tryNewline >>= \e ->
-                modifyState (\st -> st {pDecls = envAddVal (pDecls st) (Val v e)})
-        parseVarWithType :: Variable -> ParserD ()
-        parseVarWithType v = try $
+                getParserState >>= \state ->
+                (\declPos -> modifyState (\st -> 
+                    st {pDecls = envAddVal (pDecls st) (declPos,Val v e)})
+                    ) (DeclPos beginPos $ statePos state)
+        parseVarWithType :: Variable -> SourcePos -> ParserD ()
+        parseVarWithType v beginPos = try $
                     keyword ":" >>
                     parseFunType >>= \ty ->
                     parseVar >>= \v' ->
                     if v /= v' 
                         then fail (show v ++ " != " ++ show v') 
-                        else parseVarWithoutType (var (tRepr v) ty)
+                        else parseVarWithoutType (var (tRepr v) ty) beginPos
 
 -- | Parser para propiedades.
 parseProp :: ParserD ()
 parseProp = do
+        state <- getParserState
+        let beginPos = statePos state
         name <- parseName
         e <- parseExpr Nothing tryNewline
-        modifyState (\st -> st {pDecls = envAddProp (pDecls st) (Prop name e)})
+        state <- getParserState
+        let endPos = statePos state
+        let declPos = DeclPos beginPos endPos
+        modifyState (\st -> st {pDecls = envAddProp (pDecls st) (declPos,Prop name e)})
 
 -- | Parser de declaraciones.
 parseDecl :: ParserD ()

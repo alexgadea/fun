@@ -154,4 +154,4 @@ loadMainModuleFromString s = do
 
 -- Queries for environments
 getFuncs :: Environment -> [FunDecl]
-getFuncs = concatMap (functions . decls)
+getFuncs = concatMap (map snd . functions . decls)
