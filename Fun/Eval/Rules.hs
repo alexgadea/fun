@@ -1,5 +1,8 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Fun.Eval.Rules where
 
+import Lens.Family
+import Lens.Family.TH
 
 import Fun.Decl
 import Fun.Environment
@@ -26,17 +29,6 @@ import Data.Function(on)
 
 data EvOrder = Eager | Normal
 
-type EvState a = ReaderT (EvOrder,Env,[Theory]) EvalM a
-
-getEnv :: EvState Env
-getEnv = asks (\(_,env,_) -> env)
-
-getOrder :: EvState EvOrder
-getOrder = asks (\(ord,_,_) -> ord)
-
-getTheories :: EvState [Theory]
-getTheories = asks (\(_,_,ths) -> ths)
-
 -- | La evaluación de una expresión puede ser correcta o incorrecta.
 type EvalM = Either String 
 
@@ -45,6 +37,23 @@ type EvalM = Either String
 
 data Env = Env { decls :: [FunDecl] }
          deriving Show
+
+data EvalEnv = EvalEnv { _order :: EvOrder
+                       , _env   :: Env
+                       , _theories :: [Theory]
+                       }
+$(mkLenses ''EvalEnv)
+
+type EvState a = ReaderT EvalEnv EvalM a
+
+getEnv :: EvState Env
+getEnv = asks ((^. env))
+
+getOrder :: EvState EvOrder
+getOrder = asks ((^. order))
+
+getTheories :: EvState [Theory]
+getTheories = asks ((^. theories))
 
 -- | Una aplicación parcial de una función a varios argumentos.
 type PartialApp = (Func,[PreExpr])
@@ -147,7 +156,7 @@ isCanonical (BinOp op e e') ty = (isConstructor ty op &&) <$>
                                    t1 :-> t2 :-> _ -> getType e >>=
                                                      unificate t1 >>= \t1' ->
                                                      getType e' >>=
-                                                     unificate t2 >>= \t2' ->
+                                                     unificate t2 >>= \t2' ->                                                     
                                                      liftToIndType (isCanonical e) t1' `and'`
                                                      liftToIndType (isCanonical e') t2'
                                    _ -> error "Impossible"

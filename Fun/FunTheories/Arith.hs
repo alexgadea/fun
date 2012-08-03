@@ -34,11 +34,11 @@ varT = var "t" (TyAtom ATyNat)
 -}
 
 natSumExpr :: PreExpr
-natSumExpr = Case (Var varN) [ (Con EquArith.natZero,
-                          Var varM)
-                       , (UnOp EquArith.natSucc (Var varT),
-                          UnOp EquArith.natSucc (BinOp EquArith.natSum (Var varT) (Var varM)))
-                       ]
+natSumExpr = Case (Var varN) 
+             [ (Con EquArith.natZero, Var varM)
+             , (UnOp EquArith.natSucc (Var varT),
+                     UnOp EquArith.natSucc (BinOp EquArith.natSum (Var varT) (Var varM)))
+             ]
 
 natSum :: OpDecl 
 natSum = OpDecl EquArith.natSum [varN,varM] natSumExpr

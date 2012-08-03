@@ -1,5 +1,5 @@
 -- | Modulo que construye pruebas a partir de una derivación.
-module Fun.Eval.Proof where
+module Fun.Eval.Proof(evalToProof,getEnd'') where
 
 import Fun.Eval.Rules
 import Fun.Theories(funTheory)
@@ -21,9 +21,10 @@ import Control.Monad.Reader
 
 testEval :: Environment -> String -> String
 testEval env = either id printProof . 
-               flip runReaderT (Eager,env',funTheory) .
+               flip runReaderT initEnv .
                evalF . toFocus . parser
     where env' = Env $ getFuncs env
+          initEnv = EvalEnv Eager env' funTheory
 
 
 eval :: PreExpr -> E.Focus -> P.EvalStep -> EvState Proof
@@ -47,6 +48,10 @@ evalF foc = isCan (E.toExpr foc) >>= \canFoc ->
 getEnd' :: Proof -> EvState E.Focus
 getEnd' = either (const $ fail' "getEnd") return . getEnd 
                
+getEnd'' :: Monad m => Proof -> m E.Focus
+getEnd'' = either (const $ fail "getEnd") return . getEnd 
+               
+
 
 evalToProof :: PreExpr -> EvState Proof
 evalToProof e@(Var _) = fail' "evalVar"
