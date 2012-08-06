@@ -22,6 +22,7 @@ import Text.Parsec.Pos
 
 data DeclPos = DeclPos { begin :: SourcePos
                        , end   :: SourcePos
+                       , moduleName :: Text
                        }
     deriving Show
 
@@ -182,6 +183,6 @@ initDeclarations = Declarations {
                   , indTypes = mapIndTypes
                 }
     where
-        initDeclPos = DeclPos initPosThms initPosThms
+        initDeclPos = DeclPos initPosThms initPosThms (pack "")
         initPosThms = newPos "TeoremasIniciales" 0 0
         

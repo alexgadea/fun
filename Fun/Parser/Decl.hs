@@ -135,9 +135,9 @@ parseFuncPreExpr = EquP.parseVariable
         func/spec deben estar declaradas antes, o para el caso de las variables
         que este entre las variables de los argumentos.
 -}
-parseSF :: UnifySF -> ParserD ()
-parseSF ecnstr = getParserState >>= \state -> parseFuncPreExpr >>= \fun -> 
-                 (\pst ->   parseFunWithType fun pst 
+parseSF :: UnifySF -> Text -> ParserD ()
+parseSF ecnstr modName = getParserState >>= \state -> parseFuncPreExpr >>= \fun -> 
+                 (\pst ->   parseFunWithType fun pst
                         <|> parseFunWithoutType fun pst) (statePos state)
     where
         parseFunWithoutType :: Variable -> SourcePos -> ParserD ()
@@ -159,28 +159,34 @@ parseSF ecnstr = getParserState >>= \state -> parseFuncPreExpr >>= \fun ->
             e <- parseExpr (Just vs) tryNewline
             mname <- (parseTheoName <|> return Nothing)
             state <- getParserState
-            let declPos = DeclPos beginPos $ statePos state
+            let declPos = DeclPos { begin = beginPos 
+                                  , end = statePos state
+                                  , moduleName = modName
+                                }
             modifyState (\st -> 
                     st {pDecls = envAddFun (pDecls st) (declPos,cnstr fun vs e mname)}) 
         parseTheoName :: ParserD (Maybe Text)
         parseTheoName = Just <$> (keywordDerivingFrom >> parseName)
-        parseS :: Variable -> S -> [Variable] -> SourcePos -> ParserD ()
+        parseS :: Variable -> S -> [Variable] -> SourcePos  -> ParserD ()
         parseS fun cnstr vs beginPos = do
             e <- parseExpr (Just vs) tryNewline
             state <- getParserState
-            let declPos = DeclPos beginPos $ statePos state
+            let declPos = DeclPos { begin = beginPos 
+                                  , end = statePos state
+                                  , moduleName = modName
+                            }
             modifyState (\st -> 
                     st {pDecls = envAddSpec (pDecls st) (declPos,cnstr fun vs e)})
         parseFunArgs :: ParserD [Variable]
         parseFunArgs = manyTill parseVar (try $ string "=")
 
 -- | Parsea una especificación.
-parseSpec :: ParserD ()
-parseSpec = parseSF (Left Spec)
+parseSpec :: Text -> ParserD ()
+parseSpec modName = parseSF (Left Spec) modName
 
 -- | Parsea una función.
-parseFun :: ParserD ()
-parseFun = parseSF (Right Fun)
+parseFun :: Text -> ParserD ()
+parseFun modName = parseSF (Right Fun) modName
 
 -- | Parser de relaciones en ParserD, parsea hasta un terminador till.
 parseRel :: ParserD () -> ParserD Relation
@@ -217,15 +223,15 @@ parseProof till = do
 
 -- | Parsea un teorema.
 -- TODO: Mejorar el informe de errores.
-parseThm :: ParserD ()
-parseThm = do
+parseThm :: Text -> ParserD ()
+parseThm modName = do
     state <- getParserState
     let beginPos = statePos state
     name <- parseName
     p <- parseProof (try $ keywordEnd >> keywordProof)
     state <- getParserState
     let endPos = statePos state
-    let declPos = DeclPos beginPos endPos
+    let declPos = DeclPos beginPos endPos modName
     let declThm = Thm $ createTheorem name p
     modifyState (\st -> st { pDecls = envAddTheorem (pDecls st) (declPos,declThm)
                            , pProofs = addTheorem (pProofs st) name p
@@ -246,50 +252,51 @@ addTheorem pst pn p =
     2. Las variables y funciones que esten en la expresión relacionada con la 
         func/spec deben estar declaradas antes.
 -}
-parseVal :: ParserD ()
-parseVal = parseVar >>= \v -> getParserState >>= \state ->
-           (\pst -> parseVarWithoutType v pst 
-                <|> parseVarWithType v pst) (statePos state) 
+parseVal :: Text -> ParserD ()
+parseVal modName = parseVar >>= \v -> getParserState >>= \state ->
+           (\pst -> parseVarWithoutType v pst modName
+                <|> parseVarWithType v pst modName) (statePos state) 
     where 
-        parseVarWithoutType :: Variable -> SourcePos -> ParserD ()
-        parseVarWithoutType v beginPos = try $
+        parseVarWithoutType :: Variable -> SourcePos -> Text -> ParserD ()
+        parseVarWithoutType v beginPos modName = try $
                 keyword "=" >> parseExpr Nothing tryNewline >>= \e ->
                 getParserState >>= \state ->
                 (\declPos -> modifyState (\st -> 
                     st {pDecls = envAddVal (pDecls st) (declPos,Val v e)})
-                    ) (DeclPos beginPos $ statePos state)
-        parseVarWithType :: Variable -> SourcePos -> ParserD ()
-        parseVarWithType v beginPos = try $
+                    ) (DeclPos beginPos (statePos state) modName)
+        parseVarWithType :: Variable -> SourcePos -> Text -> ParserD ()
+        parseVarWithType v beginPos modName = try $
                     keyword ":" >>
                     parseFunType >>= \ty ->
                     parseVar >>= \v' ->
                     if v /= v' 
                         then fail (show v ++ " != " ++ show v') 
-                        else parseVarWithoutType (var (tRepr v) ty) beginPos
+                        else parseVarWithoutType (var (tRepr v) ty) beginPos modName
 
 -- | Parser para propiedades.
-parseProp :: ParserD ()
-parseProp = do
+parseProp :: Text -> ParserD ()
+parseProp modName = do
         state <- getParserState
         let beginPos = statePos state
         name <- parseName
         e <- parseExpr Nothing tryNewline
         state <- getParserState
         let endPos = statePos state
-        let declPos = DeclPos beginPos endPos
+        let declPos = DeclPos beginPos endPos modName
         modifyState (\st -> st {pDecls = envAddProp (pDecls st) (declPos,Prop name e)})
 
 -- | Parser de declaraciones.
-parseDecl :: ParserD ()
-parseDecl =  parseLet "spec" parseSpec
-         <|> parseLet "prop" parseProp
-         <|> parseBeginProof parseThm
-         <|> parseLet "fun"  parseFun
-         <|> parseLet "val"  parseVal
+parseDecl :: Text -> ParserD ()
+parseDecl modName =  
+             parseLet "spec" (parseSpec modName)
+         <|> parseLet "prop" (parseProp modName)
+         <|> parseBeginProof (parseThm modName)
+         <|> parseLet "fun"  (parseFun modName)
+         <|> parseLet "val"  (parseVal modName)
 
 -- | Parsea una declaración en desde un string.
 parseFromStringDecl :: String -> Either ParseError ()
-parseFromStringDecl = runParser parseDecl initPState ""
+parseFromStringDecl = runParser (parseDecl $ pack "") initPState ""
 
 -- | Estado inicial del parser.
 initPState :: PDeclState

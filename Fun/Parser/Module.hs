@@ -18,8 +18,8 @@ parseModule :: ParserD Module
 parseModule = do
             keywordModule
             mName <- parseModuleName
-            imports <- manyTill parseImport parseDecl
-            manyTill (parseDecl <|> parseComments) eof
+            imports <- manyTill parseImport (parseDecl mName)
+            manyTill (parseDecl mName <|> parseComments) eof
             st <- getState
             let ders = createDerivations $ pDecls st
             return $ Module mName imports (pDecls st) ders
