@@ -151,6 +151,7 @@ parseSF ecnstr modName = getParserState >>= \state -> parseFuncPreExpr >>= \fun 
         parseFunWithType fun beginPos = try $
                 keyword ":" >>
                 parseFunType >>= \ty -> 
+                many (whites <|> tryNewline) >>
                 parseFuncPreExpr >>= \fun' ->
                 if fun /= fun' 
                     then fail (show fun ++ " != " ++ show fun') 
@@ -158,7 +159,8 @@ parseSF ecnstr modName = getParserState >>= \state -> parseFuncPreExpr >>= \fun 
         parseF :: Variable -> F -> [Variable] -> SourcePos -> ParserD ()
         parseF fun cnstr vs beginPos = do
             e <- parseExpr (Just vs) tryNewline
-            mname <- (parseTheoName <|> return Nothing)
+            many (whites <|> tryNewline) 
+            mname <- (parseTheoName <|> (keywordEnd >> return Nothing))
             state <- getParserState
             let declPos = DeclPos { begin = beginPos 
                                   , end = statePos state
@@ -288,7 +290,7 @@ parseProp modName = do
 
 -- | Parser de declaraciones.
 parseDecl :: Text -> ParserD ()
-parseDecl modName =  
+parseDecl modName = 
              parseLet "spec" (parseSpec modName)
          <|> parseLet "prop" (parseProp modName)
          <|> parseBeginProof (parseThm modName)
