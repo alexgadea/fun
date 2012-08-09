@@ -142,11 +142,11 @@ parseFromFileModule fp = readModule (unpack fp) >>= \eitherS ->
                         _ -> return $ Right eErr
 
 loadModules :: [ModName] -> CheckModule (Maybe ModuleError)
-loadModules = foldM (\may mn -> 
+loadModules = foldM (\may mn -> let mnf = (unpack mn) ++ ".fun" in
                 case may of
                     Just merr -> return $ Just merr
                     _-> do
-                        mParsedM <- liftIO $ parseFromFileModule mn
+                        mParsedM <- liftIO $ parseFromFileModule (pack mnf)
                         either (return . Just) checkModule mParsedM) Nothing
 
 loadMainModule :: ModName -> IO (Either ModuleError Environment)
