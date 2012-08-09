@@ -6,27 +6,32 @@ import Equ.Proof
 
 import Data.Text (Text,unpack)
 
-type ErrInDecl d = ([DeclError],d)
+import Text.Parsec.Pos
+
+data DeclPos = DeclPos { begin :: SourcePos
+                       , end   :: SourcePos
+                       , moduleName :: Text
+                       }
+    deriving Eq
+
+instance Show DeclPos where
+    show = show . sourceLine . begin
+
+data ErrInDecl d = ErrInDecl { ePos  :: DeclPos
+                             , errs  :: [DeclError]
+                             , eDecl ::d
+                             } 
+    deriving (Show,Eq)
 
 -- | Errores sobre las declaraciones.
-data DeclError = UndeclaredVar Variable
-               | UndeclaredFunc Variable
+data DeclError = NotInScopeVar Variable
                | InvalidPrgDeclaration
                | InvalidProofForThm ProofError
-               | MultipleDeclaredVar Variable
-               | MultipleDeclaredFunc Variable
-               | MultipleDeclaredSpec Variable
-               | MultipleDeclaredThm Text
-               | MultipleDeclaredProp Text
+               | DuplicateName Text
     deriving Eq
     
 instance Show DeclError where
-    show (UndeclaredVar v) = "Variable " ++ show v ++ " sin declarar."
-    show (UndeclaredFunc f) = "Función " ++ show f ++ " sin declarar."
+    show (NotInScopeVar v) = "Declaración " ++ show v ++ " fuera de alcance."
     show InvalidPrgDeclaration = "La función no declara un programa valido."
     show (InvalidProofForThm perr) = "Prueba invalida: " ++ show perr
-    show (MultipleDeclaredVar v) = "Multiple declaración de la varible " ++ show v
-    show (MultipleDeclaredFunc f) = "Multiple declaración de la función " ++ show f
-    show (MultipleDeclaredSpec s) = "Multiple declaración de la especificación " ++ show s
-    show (MultipleDeclaredThm t) = "Multiple declaración de la teorema " ++ show (unpack t)
-    show (MultipleDeclaredProp t) = "Multiple declaración de la proposición " ++ show (unpack t)
+    show (DuplicateName t) = "Nombre duplicado " ++ unpack t

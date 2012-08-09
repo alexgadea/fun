@@ -46,7 +46,8 @@ import Control.Applicative ((<$>),(<*>))
 
 -- Imports Fun.
 import Fun.Decl
-import Fun.Declarations( Declarations, DeclPos (..)
+import Fun.Decl.Error (DeclPos (..))
+import Fun.Declarations( Declarations
                       , vals, functions, props, specs
                       , envAddFun, envAddVal, envAddProp
                       , envAddSpec, envAddTheorem
@@ -166,10 +167,10 @@ parseSF ecnstr modName = getParserState >>= \state -> parseFuncPreExpr >>= \fun 
             modifyState (\st -> 
                     st {pDecls = envAddFun (pDecls st) (declPos,cnstr fun vs e mname)}) 
         parseTheoName :: ParserD (Maybe Text)
-        parseTheoName = Just <$> (keywordDerivingFrom >> parseName)
-        parseS :: Variable -> S -> [Variable] -> SourcePos  -> ParserD ()
+        parseTheoName = Just <$> (keywordDeriving >> keywordFrom >> parseName)
+        parseS :: Variable -> S -> [Variable] -> SourcePos -> ParserD ()
         parseS fun cnstr vs beginPos = do
-            e <- parseExpr (Just vs) tryNewline
+            e <- parseExpr (Just vs) keywordEnd
             state <- getParserState
             let declPos = DeclPos { begin = beginPos 
                                   , end = statePos state
@@ -207,8 +208,7 @@ parseRel till = do
 parseProof :: ParserD () -> ParserD Proof
 parseProof till = do 
                 st <- getState
-                fmap (parseProof' (pProofs st)) 
-                     (manyTill anyChar till) >>= pass
+                fmap (parseProof' (pProofs st)) (manyTill anyChar till) >>= pass
     where
         pass :: Either ParseError Proof -> ParserD Proof
         pass ep = case ep of
@@ -228,6 +228,7 @@ parseThm modName = do
     state <- getParserState
     let beginPos = statePos state
     name <- parseName
+    many newline
     p <- parseProof (try $ keywordEnd >> keywordProof)
     state <- getParserState
     let endPos = statePos state
@@ -279,7 +280,7 @@ parseProp modName = do
         state <- getParserState
         let beginPos = statePos state
         name <- parseName
-        e <- parseExpr Nothing tryNewline
+        e <- parseExpr Nothing keywordEnd
         state <- getParserState
         let endPos = statePos state
         let declPos = DeclPos beginPos endPos modName

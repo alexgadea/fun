@@ -20,6 +20,9 @@ import Control.Monad.Identity
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State (StateT,get,put,runStateT,modify)
 
+import Prelude hiding (catch)
+import qualified Control.Exception as C
+import IO
 
 -- | Environment es el conjunto de módulos que se tienen cargados en un momento dado
 --   en Fun. Cada vez que se hace un import desde un módulo, debe referirse a un
@@ -121,10 +124,22 @@ extractDeclImported m env =
         imDecls = L.map decls $ imMods m ++ imMods' m
 
 parseFromFileModule :: TextFilePath -> IO (Either ModuleError Module)
-parseFromFileModule fp = readFile ("ModuleExamples/" ++ unpack fp) >>= \s ->
-                        case parseFromStringModule s of
-                            Left err -> return . Left $ ModuleParseError err
-                            Right m -> return $ Right m
+parseFromFileModule fp = readModule (unpack fp) >>= \eitherS ->
+                        either (return . Left) (return . load) eitherS
+    where
+        load :: String -> Either ModuleError Module
+        load s = case (parseFromStringModule s) of
+                    Left err -> Left $ ModuleParseError err
+                    Right m -> Right m
+        readModule :: FilePath -> IO (Either ModuleError String)
+        readModule fp =
+                    (C.catch (readFile fp)
+                             (\e -> do 
+                                    let err = show (e :: C.IOException) 
+                                    return "ModuleError")) >>= \eErr ->
+                    case eErr of
+                        "ModuleError" -> return $ Left $ ModuleErrorFileDoesntExist $ pack fp
+                        _ -> return $ Right eErr
 
 loadModules :: [ModName] -> CheckModule (Maybe ModuleError)
 loadModules = foldM (\may mn -> 

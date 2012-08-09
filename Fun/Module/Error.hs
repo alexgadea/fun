@@ -10,6 +10,7 @@ import Fun.Decl (SpecDecl, FunDecl, ValDecl, ThmDecl)
 import Data.Text (Text,unpack)
 
 data ModuleError = ModuleParseError ParseError
+                 | ModuleErrorFileDoesntExist Text
                  | ModuleCycleImport [Text]
                  | ModuleError 
                     { mName :: Text
@@ -22,6 +23,8 @@ data ModuleError = ModuleParseError ParseError
 
 instance Show ModuleError where
     show (ModuleParseError perr) = show perr
+    show (ModuleErrorFileDoesntExist t) = 
+        "No existe el archivo correspondiente a este nombre de módulo: " ++ unpack t
     show (ModuleCycleImport (mn:mns)) = 
         unlines [ "Import ciclico:\n\tbegin in -> " ++ show (unpack mn)
                 , foldr (\mn s -> s ++ "\n\timport -> " ++ show (unpack mn)) "" (init mns)

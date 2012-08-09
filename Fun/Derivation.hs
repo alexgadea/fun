@@ -46,7 +46,7 @@ createDerivations decls = do
         equalThm f t = (Just $ getNameDecl t) == getFunDerivingFrom f
 
 -- | Funcion que dada una derivacion dice si es válida o no.
---checkDerivation :: Derivation -> DM Derivation
+checkDerivation :: Derivation -> Either ([DerivationError], Derivation) Derivation
 checkDerivation d = 
             case (checkStartExpr, checkEndExpr, checkHypExpr) of
                 ([],[],[]) -> return d

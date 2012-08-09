@@ -77,9 +77,6 @@ keywordWith = keyword "with"
 keywordEnd :: ParserD ()
 keywordEnd = keyword "end"
 
-keywordDerivingFrom :: ParserD ()
-keywordDerivingFrom = keywordDeriving >> keywordFrom
-
 whites :: ParserD ()
 whites = whiteSpace lexer
 
