@@ -22,7 +22,7 @@ import Control.Monad.State (StateT,get,put,runStateT,modify)
 
 import Prelude hiding (catch)
 import qualified Control.Exception as C
-import IO
+import System.IO
 
 -- | Environment es el conjunto de módulos que se tienen cargados en un momento dado
 --   en Fun. Cada vez que se hace un import desde un módulo, debe referirse a un
