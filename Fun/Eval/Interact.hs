@@ -58,7 +58,7 @@ start vol w e cfg | configState cfg = stepPrf e (cfg ^. evEnv) >>=
                                       either (\err -> w (EvErr (ErrIntOther err)) >> return (cfg,Nothing)) 
                                              (\prf -> return (cfg',Just prf))
                   | otherwise       = notProgress w cfg ErrIntAlreadyRunning
-    where cfg' = evState ^= vol $ (expr ^= Just e) cfg
+    where cfg' = evState <~ vol $ (expr <~ Just e) cfg
 
 next :: (EvResult -> IO a) -> PreExpr -> Config -> IO (Config, Maybe Proof)
 next w e cfg | runningState cfg = stepPrf e (cfg ^. evEnv) >>=

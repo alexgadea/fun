@@ -15,10 +15,9 @@ import qualified Equ.Parser as EquP ( parsePreExpr
                                     , pProofSet, lastProofName
                                     , EitherName
                                     , ParenFlag(UseParen,UnusedParen)
-                                    , PExprStateClass
-                                    , PProofStateClass
-                                    , pExprState, setExprState
-                                    , pProofState
+                                    , PExprStateClass (..)
+                                    , PProofStateClass (..)
+                                    , parseType
                                     )
 import qualified Equ.PreExpr as PE ( PreExpr, PreExpr' (Var)
                                    , toFocus,Focus,unParen
@@ -63,49 +62,17 @@ type S = (Variable -> [Variable] -> PE.PreExpr -> SpecDecl)
 type F = (Variable -> [Variable] -> PE.PreExpr -> Maybe Text -> FunDecl)
 type UnifySF = Either S F
 
-
--- | Uso del parser de una expresión definido en 'Equ.Parser.Expr'.
--- TODO Ale: No esta bonito como manejamos el pasaje de errores con pass
--- ademas pasa que tenemos que re-acomodar la posición del error.
--- (Actualización) Tengo bastante avanzado en como solucionar esto y agregar
--- ademas mucha mas informacion sobre los errores de parseo.
--- parseExpr :: Maybe [Variable] -> ParserD () -> ParserD PE.PreExpr
--- parseExpr mvs till = getState >>= \st ->
---                      fmap (exprL $ pExprs st) (manyTill anyChar till) >>= pass
---     where
---         pass :: Either ParseError PE.Focus -> ParserD PE.PreExpr
---         pass ef = case ef of
---                     Right f -> return (PE.toExpr f)
---                     Left per -> getPosition >>= \p -> 
---                                 fail $ show $ flip setErrorPos per $
---                                 setSourceLine (errorPos per) (sourceLine p-1)
---         exprL' :: EquP.Parser' PE.Focus
---         exprL' = fmap (PE.toFocus . PE.unParen) (spaces >> EquP.parsePreExpr)
---         exprL :: EquP.PExprState -> String -> Either ParseError PE.Focus
---         exprL vt = runParser exprL' vt ""
-
+-- | Parser de preExpresiones.
 parseExpr ::  ParserD PE.PreExpr
 parseExpr = EquP.parsePreExpr
 
 -- | Parsea el tipo de una función.
 parseFunType :: ParserD Type
-parseFunType = parseType'
+parseFunType = EquP.parseType
 
 -- | Parsea el tipo de una variable.
 parseVarType :: ParserD Type
-parseVarType = parseType'
-
--- | Parser general de tipos.
-parseType' :: ParserD Type
-parseType' = fmap EquP.parseTyFromString (manyTill anyChar (try (char '\n'))) 
-             >>= pass
-    where
-        pass :: Either ParseError Type -> ParserD Type
-        pass ef = case ef of
-                    Right e -> return e
-                    Left per -> getPosition >>= \p -> 
-                                fail $ show $ flip setErrorPos per $
-                                setSourceLine (errorPos per) (sourceLine p-1)
+parseVarType = EquP.parseType
 
 -- | Parsea prefijos de declaraciones y continua con p.
 parseLet :: String -> ParserD () -> ParserD ()
@@ -116,24 +83,14 @@ parseLet s parse = try $ do many newline
                             many newline
                             return ()
 
--- | Parsea prefijos para declaración de pruebas.            
-parseBeginProof :: ParserD () -> ParserD ()
-parseBeginProof parse = try $ do 
-                        many newline
-                        keywordBegin
-                        keywordProof
-                        parse
-                        many newline
-                        return ()
-
 -- | Parsea nombres que comienzan con minuscula.
 parseName :: ParserD Text
 parseName = lower >>= \lc -> fmap (pack . (lc :)) (many1 letter)
 
-parseVar :: ParsecT String u Identity Variable
+parseVar :: ParserD Variable
 parseVar = EquP.parseVariable
 
-parseFuncPreExpr :: ParsecT String u Identity Variable
+parseFuncPreExpr :: ParserD Variable
 parseFuncPreExpr = EquP.parseVariable
 
 -- | Parser general para funciones y especificaciones.
@@ -144,9 +101,12 @@ parseFuncPreExpr = EquP.parseVariable
         que este entre las variables de los argumentos.
 -}
 parseSF :: UnifySF -> Text -> ParserD ()
-parseSF ecnstr modName = getParserState >>= \state -> parseFuncPreExpr >>= \fun -> 
-                 (\pst ->   parseFunWithType fun pst
-                        <|> parseFunWithoutType fun pst) (statePos state)
+parseSF ecnstr modName = getParserState >>= \state -> 
+                         try (parseFuncPreExpr) >>= \fun -> 
+                        (\pst -> parseFunWithType fun pst
+                                <|> 
+                                parseFunWithoutType fun pst
+                        ) (statePos state)
     where
         parseFunWithoutType :: Variable -> SourcePos -> ParserD ()
         parseFunWithoutType fun beginPos = do
@@ -166,7 +126,7 @@ parseSF ecnstr modName = getParserState >>= \state -> parseFuncPreExpr >>= \fun 
                     else parseFunWithoutType (var (tRepr fun) ty) beginPos
         parseF :: Variable -> F -> [Variable] -> SourcePos -> ParserD ()
         parseF fun cnstr vs beginPos = do
-            e <- parseExpr -- (Just vs) tryNewline
+            e <- parseExpr
             many (whites <|> tryNewline) 
             mname <- (parseTheoName <|> (keywordEnd >> return Nothing))
             state <- getParserState
@@ -180,7 +140,7 @@ parseSF ecnstr modName = getParserState >>= \state -> parseFuncPreExpr >>= \fun 
         parseTheoName = Just <$> (keywordDeriving >> keywordFrom >> parseName)
         parseS :: Variable -> S -> [Variable] -> SourcePos -> ParserD ()
         parseS fun cnstr vs beginPos = do
-            e <- parseExpr --(Just vs) keywordEnd
+            e <- parseExpr
             keywordEnd
             state <- getParserState
             let declPos = DeclPos { begin = beginPos 
@@ -215,24 +175,8 @@ parseRel till = do
         parseRel' :: EquP.PProofState -> String -> Either ParseError Relation
         parseRel' pps = runParser EquP.rel pps ""
 
--- | Parser de pruebas para parserD, parsea una prueba hasta el terminador till.
--- parseProof :: ParserD () -> ParserD Proof
--- parseProof till = do 
---                 st <- getState
---                 fmap (parseProof' (pProofs st)) (manyTill anyChar till) >>= pass
---     where
---         pass :: Either ParseError Proof -> ParserD Proof
---         pass ep = case ep of
---                     Right p -> return p
---                     Left per -> getPosition >>= \p ->
---                                 fail (show $ flip setErrorPos per $
---                                 setSourceLine (errorPos per) (sourceLine p-1))
---         parseHack :: String -> String
---         parseHack s = "begin proof " ++ s ++ "end proof"
---         parseProof' :: EquP.PProofState -> String -> Either ParseError Proof
---         parseProof' pps s = runParser (EquP.proof Nothing True) pps "" (parseHack s)
 parseProof :: ParserD Proof
-parseProof = EquP.proof Nothing False
+parseProof = EquP.proof Nothing True
 
 -- | Parsea un teorema.
 -- TODO: Mejorar el informe de errores.
@@ -240,11 +184,7 @@ parseThm :: Text -> ParserD ()
 parseThm modName = do
     state <- getParserState
     let beginPos = statePos state
---     name <- parseName
---     many (whites <|> tryNewline)
---     p <- parseProof -- (try $ keywordEnd >> keywordProof)
---     keywordEnd
---     keywordProof
+    s <- getInput
     p <- parseProof
     state <- getState
     let mname = EquP.lastProofName $ pProofs state
@@ -316,10 +256,9 @@ parseDecl :: Text -> ParserD ()
 parseDecl modName = 
              parseLet "spec" (parseSpec modName)
          <|> parseLet "prop" (parseProp modName)
-         <|> --parseBeginProof (parseThm modName)
-             (parseThm modName)
          <|> parseLet "fun"  (parseFun modName)
          <|> parseLet "val"  (parseVal modName)
+         <|> parseThm modName
 
 -- | Parsea una declaración en desde un string.
 parseFromStringDecl :: String -> Either ParseError ()

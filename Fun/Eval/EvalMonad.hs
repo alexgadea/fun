@@ -100,7 +100,7 @@ runningState cfg = running $ cfg ^. evState
 
 setParam :: Param -> Config -> Config
 setParam (Order o) cfg = if configState cfg
-                         then (evEnv ^= (order ^= o) (cfg ^. evEnv)) cfg
+                         then (evEnv <~ (order <~ o) (cfg ^. evEnv)) cfg
                          else cfg
 
 getOrder :: Config -> EvOrder

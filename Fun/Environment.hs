@@ -2,9 +2,9 @@ module Fun.Environment where
 
 import Fun.Module
 import Fun.Module.Error
-import Fun.Parser hiding (parseFromFileModule)
+import Fun.Parser 
 import Fun.Parser.Internal
-import Fun.Parser.Module hiding (parseFromFileModule)
+import Fun.Parser.Module
 import Fun.Decl(FunDecl)
 import Fun.Declarations
 import Fun.Derivation

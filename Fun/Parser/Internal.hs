@@ -16,9 +16,10 @@ import Data.Text (Text)
 -- Imports Equ.
 import Equ.Types(Type)
 import Equ.Syntax(VarName,FuncName)
-import qualified Equ.Parser as EquP (PProofState, PExprState,
-                                    PExprStateClass,PProofStateClass,
-                                    setExprState,pExprState,pProofState,setProofState)
+import qualified Equ.Parser as EquP ( PProofState, PExprState
+                                    , PExprStateClass (..)
+                                    , PProofStateClass(..)
+                                    )
 
 -- Imports Fun.
 import Fun.Declarations
@@ -31,11 +32,11 @@ data PDeclState = PDeclState { pDecls :: Declarations
                              }
                              
 instance EquP.PExprStateClass PDeclState where
-    pExprState = pExprs
+    getExprState = pExprs
     setExprState declst es = declst { pExprs = es }
     
 instance EquP.PProofStateClass PDeclState where
-    pProofState = pProofs
+    getProofState = pProofs
     setProofState declst ps = declst { pProofs = ps }
     
 type ParserD a = ParsecT String PDeclState Identity a
