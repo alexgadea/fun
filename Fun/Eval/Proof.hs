@@ -17,7 +17,7 @@ import Data.Map (fromList)
 import Data.Maybe (isNothing,fromJust)
 import Control.Applicative ((<$>))
 import Control.Monad ((>=>))
-import Control.Monad.Reader
+import Control.Monad.Trans.Reader
 
 testEval :: Environment -> String -> String
 testEval env = either id printProof . 
@@ -50,8 +50,6 @@ getEnd' = either (const $ fail' "getEnd") return . getEnd
                
 getEnd'' :: Monad m => Proof -> m E.Focus
 getEnd'' = either (const $ fail "getEnd") return . getEnd 
-               
-
 
 evalToProof :: PreExpr -> EvState Proof
 evalToProof e@(Var _) = fail' "evalVar"

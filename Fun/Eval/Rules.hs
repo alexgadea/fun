@@ -21,13 +21,15 @@ import Equ.Types
 import Data.List(find)
 import Data.Maybe(fromMaybe)
 
-import Control.Monad((>=>))
-import Control.Monad.Reader
+import Control.Monad((>=>),join)
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Reader
 import Control.Arrow ((&&&),(***),first)
 import Control.Applicative((<$>),liftA2)
 import Data.Function(on)
 
 data EvOrder = Eager | Normal
+             deriving Show
 
 -- | La evaluación de una expresión puede ser correcta o incorrecta.
 type EvalM = Either String 
