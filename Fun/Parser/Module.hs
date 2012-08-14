@@ -32,3 +32,10 @@ parseModule = do
 
 parseFromStringModule :: String -> Either ParseError Module
 parseFromStringModule = runParser parseModule initPState ""
+
+-- | Parsea un modulo desde un archivo.
+parseFromFileModule :: FilePath -> IO ()
+parseFromFileModule fp = readFile fp >>= \s -> 
+                        case parseFromStringModule s of
+                            Right m -> print m
+                            Left err -> print err
