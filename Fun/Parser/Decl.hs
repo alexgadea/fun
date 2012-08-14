@@ -44,7 +44,8 @@ import Data.Maybe (fromMaybe,fromJust)
 import qualified Data.Map as M (empty,Map,member,insert,(!),lookup) 
 
 -- Imports Monad.
-import Control.Monad.Identity (unless, Identity)
+-- import Control.Monad.Identity (unless, Identity)
+import Data.Functor.Identity
 import Control.Applicative ((<$>),(<*>))
 
 -- Imports Fun.

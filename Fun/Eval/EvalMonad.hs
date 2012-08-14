@@ -9,7 +9,7 @@ import Equ.Proof(Proof)
 import Fun.Theory
 import Fun.Theories(funTheory)
 import Fun.Environment
-import Fun.Eval.Rules hiding (EvalM,start)
+import Fun.Eval.Rules hiding (start)
 import Fun.Eval.Proof
 
 import Data.Monoid
@@ -121,8 +121,15 @@ listen k = k >> snd <$> lift get
 tell :: Proof -> Run r ()
 tell p = lift (modify (second (\p' -> p' `mappend` p)))
 
-getLastExpr :: Run r a -> Run r PreExpr
-getLastExpr k = listen k >>= (<$>) toExpr . getEnd''
+resetLog :: Run r ()
+resetLog = lift (modify (second (const mempty)))
+
+
+
+getLastExpr :: Run r a -> Run r (Either String PreExpr)
+getLastExpr k = listen k >>= \prf -> 
+                getCfg k >>= \cfg -> 
+                return (runReaderT (getEnd'' prf) (cfg ^. evEnv))
 
 updCfg :: Config -> Run r ()
 updCfg cfg = lift (modify (first (const cfg)))

@@ -7,11 +7,15 @@ import Fun.Environment
 import Fun.Eval.EvalMonad
 import Fun.Eval.Rules(EvOrder(..))
 import Equ.PreExpr(PreExpr)
-import Equ.Parser(parseFromString)
+import Equ.Parser
+
+import Data.Functor.Identity
 
 import Control.Applicative hiding (many)
 
-orderQP,proofQP,exprQP,lastQP :: Parser Query
+type ParserCmd b = ParsecT String PExprState Identity b
+
+orderQP,proofQP,exprQP,lastQP :: ParserCmd Query
 orderQP = QOrder <$ string "order"
 proofQP = QCurrentProof <$ string "proof"
 exprQP = QInitExpr <$ string "expr"
@@ -23,28 +27,27 @@ queriesP = choice . map try $ [ orderQP
                               , lastQP
                               ]
 
-queryP :: Parser (PreExpr -> EvCmd)
-queryP = (Get <$> (string "get" *> blanks *> queriesP)) >>= return . const
+queryP :: ParserCmd EvCmd
+queryP = Get <$> (string "get" *> blanks *> queriesP)
 
 
-stepP,traceP,evalP :: Parser (PreExpr -> EvCmd)
-stepP = Step <$ string "step"
-traceP = Trace <$ string "trace"
-evalP = Eval <$ string "eval" 
+stepP,traceP,evalP :: ParserCmd EvCmd
+stepP = Step <$> (string "step" *> blanks *> parsePreExpr)
+traceP = Trace <$> (string "trace" *> blanks *> parsePreExpr)
+evalP = Eval <$> (string "eval" *> blanks *> parsePreExpr)
 
-nextP,resetP :: Parser (PreExpr -> EvCmd)
-nextP = const Next <$ withNumArg (string "next") 
-resetP = const Reset <$ (string "reset")
+nextP,resetP :: ParserCmd EvCmd
+nextP = Next <$ string "next"
+resetP = Reset <$ string "reset"
 
-setOrder :: Parser (PreExpr -> EvCmd)
-setOrder = Set . Order <$> (string ":set" *> blanks *> evOrder) >>= 
-           return . const
-    where evOrder :: Parser EvOrder
+setOrder :: ParserCmd EvCmd
+setOrder = Set . Order <$> (string ":set" *> blanks *> evOrder)
+    where evOrder :: ParserCmd EvOrder
           evOrder = choice [ try $ Eager <$ string "eager"
                            , try $ Normal <$  string "normal"
                            ]
 
-withNumArg :: Parser String -> Parser (String,Int)
+withNumArg :: ParserCmd String -> ParserCmd (String,Int)
 withNumArg p = p >>= \cmd -> blanks >> 
                many1 digit >>= \ds -> return (cmd,num 0 ds)
     where num ac [] = ac
@@ -52,18 +55,16 @@ withNumArg p = p >>= \cmd -> blanks >>
 
 blanks = many1 (oneOf "\r\t ")
 
-evalParser :: Parser (PreExpr -> EvCmd,String)
+evalParser :: ParserCmd EvCmd
 evalParser = choice [ try nextP
                     , try resetP
                     , try setOrder
                     , try stepP
                     , try traceP
                     , try evalP
-                    , try queryP ] >>= 
-             \ac -> blanks >> many anyChar >>= \str -> 
-             return (ac,str)
+                    , try queryP ]
 
 
 parserCmd :: String -> Either String EvCmd
-parserCmd = either (Left . show) (uncurry cmd) . runParser evalParser () "EvalCommand"
+parserCmd = either (Left . show) Right . runParser evalParser (initPExprState UnusedParen) "EvalCommand"
     where cmd acc  = either (Left . show) (Right . acc) . parseFromString 

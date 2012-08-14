@@ -2,9 +2,9 @@ module Fun.Environment where
 
 import Fun.Module
 import Fun.Module.Error
-import Fun.Parser
+import Fun.Parser hiding (parseFromFileModule)
 import Fun.Parser.Internal
-import Fun.Parser.Module
+import Fun.Parser.Module hiding (parseFromFileModule)
 import Fun.Decl(FunDecl)
 import Fun.Declarations
 import Fun.Derivation
@@ -16,9 +16,9 @@ import Data.Text (unpack,pack)
 import Control.Applicative ((<$>))
 import Control.Arrow ((***))
 import Control.Monad (foldM)
-import Control.Monad.Identity  
+import Data.Functor.Identity
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.State (StateT,get,put,runStateT,modify)
+import Control.Monad.Trans.State
 
 import Prelude hiding (catch)
 import qualified Control.Exception as C

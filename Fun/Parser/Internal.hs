@@ -7,7 +7,7 @@ import Text.Parsec.Token
 import Text.Parsec.Language
 
 -- Imports Monad.
-import Control.Monad.Identity (Identity)
+import Data.Functor.Identity
 
 -- Imports Data.*
 import qualified Data.Map as M (Map)

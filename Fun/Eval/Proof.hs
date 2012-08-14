@@ -46,10 +46,10 @@ evalF foc = isCan (E.toExpr foc) >>= \canFoc ->
              
 
 getEnd' :: Proof -> EvState E.Focus
-getEnd' = either (const $ fail' "getEnd") return . getEnd 
+getEnd' = either (fail' . ("getEnd: "++) . show) return . getEnd 
                
-getEnd'' :: Monad m => Proof -> m E.Focus
-getEnd'' = either (const $ fail "getEnd") return . getEnd 
+getEnd'' :: Proof -> EvState PreExpr
+getEnd'' = either (\_err -> fail' "getEnd") (return . E.toExpr) . getEnd 
 
 evalToProof :: PreExpr -> EvState Proof
 evalToProof e@(Var _) = fail' "evalVar"

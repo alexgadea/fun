@@ -21,7 +21,6 @@ Library
                             Fun.Derivation.Derivation,
                             Fun.Derivation.Error,
                             Fun.Derivation.Monad,
-                            Fun.Eval,
                             Fun.Eval.Rules,
                             Fun.Eval.EvalMonad,
                             Fun.Eval.Proof,
