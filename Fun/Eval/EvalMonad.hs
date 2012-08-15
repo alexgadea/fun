@@ -50,6 +50,7 @@ $(mkLenses ''Config)
 
 data Query = QOrder
            | QCurrentProof
+           | QCurrentEnv
            | QInitExpr
            | QLastResult
              
@@ -59,11 +60,12 @@ data EvCmd = Reset         -- ^ Descarta cualquier evaluación que se estuviera 
            | Set Param     -- ^ Setea parámetros para la evaluación.
            | Trace PreExpr -- ^ Comienza la evaluación paso por paso, mostrando cada resultado
                            -- parcial.
-           | Step  PreExpr -- ^ Como trace pero sólo muestra la forma canónica.
-           | Eval  PreExpr -- ^ Como step pero realiza todos los pasos.
+           | Step PreExpr  -- ^ Como trace pero sólo muestra la forma canónica.
+           | Eval PreExpr  -- ^ Como step pero realiza todos los pasos.
            | Next          -- ^ Continúa la evaluación comenzada por trace o step.
-           | Get Query
-
+           | Show PreExpr  -- ^ Muestra una expresión.
+           | Get Query     -- ^ Muestra algunos parámetros de la evaluación.
+           | Help          -- ^ Muestra ayuda sobre los comandos.
 
 -- | La evaluación está estructurada con continuaciones.
 type Run r a = ContT r Aut a
@@ -99,9 +101,11 @@ runningState :: Config -> Bool
 runningState cfg = running $ cfg ^. evState
 
 setParam :: Param -> Config -> Config
-setParam (Order o) cfg = if configState cfg
-                         then (evEnv <~ (order <~ o) (cfg ^. evEnv)) cfg
-                         else cfg
+setParam (Order o) cfg = (evEnv <~ (order <~ o) (cfg ^. evEnv)) cfg
+
+updParam :: Param -> Config -> Config
+updParam par cfg | configState cfg = setParam par cfg
+                 | otherwise       = cfg
 
 getOrder :: Config -> EvOrder
 getOrder cfg = cfg ^. (evEnv . order)
@@ -115,8 +119,8 @@ getQry q p cfg = (p . q) cfg >> return cfg
 getInitExpr :: Run r a -> Run r (Maybe PreExpr)
 getInitExpr k = k >>= \_ -> (getExpr . fst <$> lift get)
 
-listen :: Run r a -> Run r Proof
-listen k = k >> snd <$> lift get
+listen :: Run r Proof
+listen = snd <$> lift get
 
 tell :: Proof -> Run r ()
 tell p = lift (modify (second (\p' -> p' `mappend` p)))
@@ -125,14 +129,17 @@ resetLog :: Run r ()
 resetLog = lift (modify (second (const mempty)))
 
 
-
-getLastExpr :: Run r a -> Run r (Either String PreExpr)
-getLastExpr k = listen k >>= \prf -> 
-                getCfg k >>= \cfg -> 
-                return (runReaderT (getEnd'' prf) (cfg ^. evEnv))
+getLastExpr :: Run r (Either String PreExpr)
+getLastExpr = listen >>= \prf -> 
+              getCfg >>= \cfg -> 
+              return (runReaderT (getEnd'' prf) (cfg ^. evEnv))
 
 updCfg :: Config -> Run r ()
 updCfg cfg = lift (modify (first (const cfg)))
 
-getCfg :: Run r a -> Run r Config
-getCfg k = k >> fst <$> lift get
+getCfg :: Run r Config
+getCfg = fst <$> lift get
+
+getEnv :: Config -> Env
+getEnv cfg = cfg ^. (evEnv . env)
+

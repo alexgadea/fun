@@ -1,6 +1,7 @@
 module Fun.Eval.Interact
     ( EvResult(..)
     , errorInParsing
+    , parserCmdCont
     , eval 
     ) where
 
@@ -15,13 +16,15 @@ import Fun.Theory
 import Fun.Theories(funTheory)
 import Fun.Environment
 import Fun.Eval.EvalMonad
-import Fun.Eval.Rules hiding (getOrder,start)
+import Fun.Eval.Rules hiding (getOrder,start,getEnv)
 import Fun.Eval.Parser
+import Fun.Eval.Help
 import Fun.Eval.Proof
 
 import Control.Applicative((<$>))
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
+import Control.Monad.Trans.Cont
 import Control.Monad.Trans.Reader
 import Control.Monad
 
@@ -67,11 +70,11 @@ next w e cfg | runningState cfg = stepPrf e (cfg ^. evEnv) >>=
              | otherwise        = notProgress w cfg ErrIntNotRunning
 
 next' :: IO String -> (EvResult -> IO a) -> Run Config Config -> Run Config Config 
-next' r w k = inter r w $ getCfg k >>= \cfg ->
-                          listen k >>= \prf ->
+next' r w k = inter r w $ k >> getCfg >>= \cfg ->
+                          listen >>= \prf ->
                           if not (runningState cfg) 
                           then notProgress' w cfg ErrIntNotRunning
-                          else getLastExpr k >>= 
+                          else getLastExpr >>= 
                                either (notProgress' w cfg . ErrIntOther. ("Last expression"++))
                                  (\e -> 
                                  lift (lift (next w e cfg)) >>= \(c,p) -> 
@@ -85,10 +88,10 @@ step = start silentEval
 trace = start noisyEval
 
 -- step' :: IO String -> (EvResult -> IO a) -> PreExpr -> Aut Config Config -> Aut Config Config
-step' r w e k = advance step (\k' -> k' >>= \cfg -> silentOk w >> return cfg) r w e k
-trace' r w e k = advance trace (\k' -> k' >>= \cfg -> (listen k') >>= resultOk w . show >> return cfg) r w e k
+step' r w e k = advance step r w e (silentOk w >> k)
+trace' r w e k = advance trace r w e (listen >>= resultOk w . show >> k)
 
-advance f k' r w e k = inter r w $ k' (k >>= (\cfg -> lift (lift (f w e cfg)) >>= uncurry addProofStep))
+advance f r w e k = inter r w (k >>= (lift . lift . f w e >=> uncurry addProofStep))
 
 -- TODO: SI la expresión final de la prueba es canónica, entonces
 -- pasar al estado Done.
@@ -97,25 +100,26 @@ addProofStep c = maybe (updateCfg c) (tell >=> const (updateCfg c))
 updateCfg c = updCfg c >> return c
 
 inter :: (IO String) -> (EvResult -> IO a) -> Run Config Config -> Run Config Config 
-inter r w k = k >>= \cfg -> 
-              liftIO r >>= \line ->
-              return (parserCmd line) >>=
-                     either (\err -> liftIO (w . EvErr . ErrIntOther $ err) >> return cfg)
-                            (\c -> eval r w c (return cfg))
+inter r w k = k >>= \cfg -> liftIO r >>= parserCmdCont r w cfg
+
+parserCmdCont :: (IO String) -> (EvResult -> IO a) -> Config -> String -> Run Config Config
+parserCmdCont r w cfg = either (liftIO . w . EvErr . ErrIntOther >=> const (return cfg))
+                               (\cmd -> eval r w cmd (return cfg)) . parserCmd 
 
 -- -- | Semántica de continuaciones para nuestro lenguaje.
 eval :: IO String -> (EvResult -> IO a) -> EvCmd -> Run Config Config -> Run Config Config 
-eval r w Reset = \k -> inter r w (k >> silentOk w >> resetLog >> updateCfg (initConfig []))
+eval r w Reset = \k -> k >>= \cfg -> silentOk w >> return cfg
 eval r w (Set p) = \k -> inter r w (k >>= \cfg -> silentOk w >> return (setParam p cfg))
 eval r w (Step e) = step' r w e
 eval r w (Trace e) = trace' r w e
 eval r w (Eval e) = trace' r w e
 eval r w (Get QOrder) = \k -> inter r w (k >>= liftIO . getQry (EvOk . show . getOrder) w)
 eval r w (Get QInitExpr) = \k -> inter r w (k >>= liftIO . getQry (EvOk . show . getExpr) w)
-eval r w (Get QCurrentProof) = \k -> inter r w (listen k >>= liftIO . w . EvOk . show >> k)
+eval r w (Get QCurrentProof) = \k -> inter r w (k >>= \cfg -> listen >>= liftIO . w . EvOk . show >> return cfg)
+eval r w (Get QCurrentEnv) = \k -> inter r w (k >>= \cfg -> (liftIO . w . EvOk . show) (getEnv cfg) >> return cfg)
 eval r w Next = next' r w
-
-
+eval r w (Show e) = \k -> inter r w (k >>= \cfg -> (resultOk w . show) e >> return cfg)
+eval r w Help = \k -> inter r w (k >>= \cfg -> (resultOk w . show) Help >> return cfg)
 
 -- -- -- -- | Si hay una expresión para ser evaluada, hace n pasos
 -- -- -- -- de ejecución y recolecta los resultados parciales en la lista.

@@ -24,6 +24,7 @@ Library
                             Fun.Eval.Rules,
                             Fun.Eval.EvalMonad,
                             Fun.Eval.Proof,
+                            Fun.Eval.Help,
                             Fun.Eval.Parser,
                             Fun.Eval.Interact,
                             Fun.FunTheories.Arith, 

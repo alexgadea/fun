@@ -38,7 +38,10 @@ type EvalM = Either String
 -- en un mapeo de patrones a expresiones.
 
 data Env = Env { decls :: [FunDecl] }
-         deriving Show
+
+instance Show Env where
+    show (Env []) = "Entorno vacío"
+    show (Env decls) = unlines $ map show decls
 
 data EvalEnv = EvalEnv { _order :: EvOrder
                        , _env   :: Env

@@ -15,9 +15,10 @@ import Control.Applicative hiding (many)
 
 type ParserCmd b = ParsecT String PExprState Identity b
 
-orderQP,proofQP,exprQP,lastQP :: ParserCmd Query
+envQP,orderQP,proofQP,exprQP,lastQP :: ParserCmd Query
 orderQP = QOrder <$ string "order"
 proofQP = QCurrentProof <$ string "proof"
+envQP = QCurrentEnv <$ string "env"
 exprQP = QInitExpr <$ string "expr"
 lastQP = QLastResult <$ string "result"
 
@@ -25,20 +26,23 @@ queriesP = choice . map try $ [ orderQP
                               , proofQP
                               , exprQP
                               , lastQP
+                              , envQP
                               ]
 
 queryP :: ParserCmd EvCmd
 queryP = Get <$> (string "get" *> blanks *> queriesP)
 
 
-stepP,traceP,evalP :: ParserCmd EvCmd
+stepP,traceP,evalP,showP :: ParserCmd EvCmd
 stepP = Step <$> (string "step" *> blanks *> parsePreExpr)
 traceP = Trace <$> (string "trace" *> blanks *> parsePreExpr)
 evalP = Eval <$> (string "eval" *> blanks *> parsePreExpr)
+showP = Show <$> (string "show" *> blanks *> parsePreExpr)
 
-nextP,resetP :: ParserCmd EvCmd
+helpP,nextP,resetP :: ParserCmd EvCmd
 nextP = Next <$ string "next"
 resetP = Reset <$ string "reset"
+helpP = Help <$ string "help"
 
 setOrder :: ParserCmd EvCmd
 setOrder = Set . Order <$> (string ":set" *> blanks *> evOrder)
@@ -53,16 +57,18 @@ withNumArg p = p >>= \cmd -> blanks >>
     where num ac [] = ac
           num ac (n:ns) = num (ac*10+(read [n])) ns
 
-blanks = many1 (oneOf "\r\t ")
+blanks = many1 $ oneOf "\r\t "
 
 evalParser :: ParserCmd EvCmd
-evalParser = choice [ try nextP
-                    , try resetP
-                    , try setOrder
-                    , try stepP
-                    , try traceP
-                    , try evalP
-                    , try queryP ]
+evalParser = choice $ map try [ nextP
+                              , resetP
+                              , setOrder
+                              , stepP
+                              , showP
+                              , traceP
+                              , evalP
+                              , queryP 
+                              , helpP ]
 
 
 parserCmd :: String -> Either String EvCmd
