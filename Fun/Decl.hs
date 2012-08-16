@@ -46,6 +46,12 @@ data OpDecl = OpDecl Operator [Variable] PE.PreExpr
 instance Eq OpDecl where
     (OpDecl op _ _) == (OpDecl op' _ _) = op == op'
 
+data DerivDecl = Deriv Variable Variable [(PE.Focus,Proof)]
+    deriving Show
+
+instance Eq DerivDecl where
+    (Deriv v _ _) == (Deriv v' _ _) = v == v'
+    
 data TypeDecl = NewType Type [Constant] [(Operator,[Variable],PE.PreExpr)] -- Para implementar a futuro.
     deriving (Eq,Show)
 
@@ -53,46 +59,60 @@ getFunDerivingFrom :: FunDecl -> Maybe Text
 getFunDerivingFrom (Fun _ _ _ mt) = mt
 
 class Decl a where
-    getNameDecl :: a -> Text
-    getFuncDecl :: a -> Maybe Variable
-    getExprDecl :: a -> Maybe PE.PreExpr
-    getVarsDecl :: a -> Maybe [Variable]
+    getNameDecl   :: a -> Text
+    getFuncDecl   :: a -> Maybe Variable
+    getExprDecl   :: a -> Maybe PE.PreExpr
+    getVarsDecl   :: a -> Maybe [Variable]
+    getFocusProof :: a -> Maybe [(PE.Focus,Proof)]
 
 instance Decl SpecDecl where
     getNameDecl (Spec f _ _) = tRepr f
     getFuncDecl (Spec f _ _) = Just f
     getExprDecl (Spec _ _ e) = Just e
     getVarsDecl (Spec _ vs _) = Just vs
+    getFocusProof _ = Nothing
     
 instance Decl PropDecl where
     getNameDecl (Prop t _) = t
     getFuncDecl _ = Nothing
     getExprDecl (Prop _ e) = Just e
     getVarsDecl _ = Nothing
+    getFocusProof _ = Nothing
     
 instance Decl ThmDecl where
     getNameDecl (Thm t) =  truthName t
     getFuncDecl _ = Nothing
     getExprDecl (Thm t) = let (Expr p) = thExpr t in Just p
     getVarsDecl _ = Nothing
+    getFocusProof _ = Nothing
     
 instance Decl FunDecl where
     getNameDecl (Fun f _ _ _) =  tRepr f
     getFuncDecl (Fun f _ _ _) = Just f
     getExprDecl (Fun _ _ p _) = Just p
     getVarsDecl (Fun _ vs _ _) = Just vs
+    getFocusProof _ = Nothing
     
 instance Decl ValDecl where
     getNameDecl (Val v _) =  tRepr v
     getFuncDecl _ = Nothing
     getExprDecl (Val _ p) = Just p
     getVarsDecl _ = Nothing
-    
+    getFocusProof _ = Nothing
+
+instance Decl DerivDecl where
+    getNameDecl   (Deriv v _ _) = tRepr v
+    getFuncDecl   (Deriv v _ _) = Just v
+    getVarsDecl   (Deriv _ v _) = Just [v]
+    getFocusProof (Deriv _ _ fps) = Just fps
+    getExprDecl _ = Nothing
+
 instance Decl TypeDecl where
     getNameDecl _ =  pack ""
     getFuncDecl _ = Nothing
     getExprDecl _ = Nothing
     getVarsDecl _ = Nothing
+    getFocusProof _ = Nothing
 
 isPrg :: PE.PreExpr -> Bool
 isPrg (PE.Quant _ _ _ _) = False

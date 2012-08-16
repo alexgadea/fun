@@ -87,6 +87,16 @@ keywordWith :: ParserD ()
 keywordWith = keyword "with"
 keywordEnd :: ParserD ()
 keywordEnd = keyword "end"
+keywordBy :: ParserD ()
+keywordBy = keyword "by"
+keywordOn :: ParserD ()
+keywordOn = keyword "on"
+keywordCases :: ParserD ()
+keywordCases = keyword "cases"
+keywordCase :: ParserD ()
+keywordCase = keyword "case"
+keywordRArrow :: ParserD ()
+keywordRArrow = keyword "->"
 
 whites :: ParserD ()
 whites = whiteSpace lexer

@@ -19,7 +19,7 @@ instance Show DeclPos where
 
 data ErrInDecl d = ErrInDecl { ePos  :: DeclPos
                              , errs  :: [DeclError]
-                             , eDecl ::d
+                             , eDecl :: d
                              } 
     deriving (Show,Eq)
 

@@ -32,6 +32,7 @@ data Declarations = Declarations {
                  , theorems  :: [(DeclPos,ThmDecl)]
                  , props     :: [(DeclPos,PropDecl)]
                  , vals      :: [(DeclPos,ValDecl)]
+                 , derivs    :: [(DeclPos,DerivDecl)]
                  , indTypes  :: [(Type,IndType)] -- Si luego extendemos para declarar tipos, este campo del environment va agregando cada uno de
                                            -- los nuevos tipos declarados. Por ahora usaremos solo el valor inicial que le pasamos,
                                            -- el cual contiene los tipos basicos de Equ.
@@ -44,17 +45,27 @@ concatDeclarations d d' = Declarations
                             (theorems d ++ theorems d')
                             (props d ++ props d')
                             (vals d ++ vals d')
+                            (derivs d ++ derivs d')
                             (indTypes d ++ indTypes d')
 
 instance Show Declarations where
     show decls = unlines [ ""
-                         , "Specs: " ++ show (specs decls)
-                         , "Funs:  " ++ show (functions decls) 
-                         , "Thms:  " ++ show (theorems decls) 
-                         , "Props: " ++ show (props decls) 
-                         , "Vals:  " ++ show (vals decls)
+                         , "Specs: "   ++ show (specs decls)
+                         , "Funs:  "   ++ show (functions decls) 
+                         , "Thms:  "   ++ show (theorems decls) 
+                         , "Props: "   ++ show (props decls) 
+                         , "Vals:  "   ++ show (vals decls)
+                         , "Derivs:  " ++ "[" ++ concatMap showDer (derivs decls) ++ "]"
                          ]
-            
+        where
+            showDer :: (DeclPos,DerivDecl) -> String
+            showDer (dPos, Deriv v v' fps) = 
+                    "(" ++ show dPos ++ "," ++ 
+                    "Deriv " ++ show v ++ " " ++
+                    show v' ++ " " ++ 
+                    ("[" ++ concatMap (show . fst) fps ++ "]") ++ 
+                    ")"
+
 envAddFun :: Declarations -> (DeclPos,FunDecl) -> Declarations
 envAddFun env f = env {functions = f : functions env}
 
@@ -69,6 +80,9 @@ envAddTheorem env p = env {theorems = p : theorems env}
 
 envAddProp :: Declarations -> (DeclPos,PropDecl) -> Declarations
 envAddProp env p = env {props = p : props env} 
+
+envAddDeriv :: Declarations -> (DeclPos,DerivDecl) -> Declarations
+envAddDeriv env p = env {derivs = p : derivs env} 
 
 valsDef :: Declarations -> [Variable]
 valsDef = L.map (\(_,Val v _) -> v) . vals
@@ -187,6 +201,7 @@ initDeclarations = Declarations {
                   , theorems = map (\t -> (initDeclPos,Thm t)) initTheorems
                   , props = []
                   , vals = []
+                  , derivs = []
                   , indTypes = mapIndTypes
                 }
     where

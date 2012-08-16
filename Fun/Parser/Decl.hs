@@ -53,7 +53,7 @@ import Fun.Decl.Error (DeclPos (..))
 import Fun.Declarations( Declarations
                       , vals, functions, props, specs
                       , envAddFun, envAddVal, envAddProp
-                      , envAddSpec, envAddTheorem
+                      , envAddSpec, envAddTheorem, envAddDeriv
                       , initDeclarations)
 import Fun.Parser.Internal
 
@@ -85,7 +85,7 @@ parseLet s parse = try $ do many newline
 
 -- | Parsea nombres que comienzan con minuscula.
 parseName :: ParserD Text
-parseName = lower >>= \lc -> fmap (pack . (lc :)) (many1 letter)
+parseName = lower >>= \lc -> (pack . (lc :)) <$> (many1 letter)
 
 parseVar :: ParserD Variable
 parseVar = EquP.parseVariable
@@ -244,20 +244,50 @@ parseProp modName = do
         state <- getParserState
         let beginPos = statePos state
         name <- parseName
-        e <- parseExpr -- Nothing keywordEnd
+        e <- parseExpr
         keywordEnd
         state <- getParserState
         let endPos = statePos state
         let declPos = DeclPos beginPos endPos modName
-        modifyState (\st -> st {pDecls = envAddProp (pDecls st) (declPos,Prop name e)})
+        modifyState (\st -> st {pDecls = envAddProp 
+                                            (pDecls st) 
+                                            (declPos,Prop name e)
+                                })
+
+parseDer :: Text -> ParserD ()
+parseDer modName = do
+        state <- getParserState
+        let beginPos = statePos state
+        name <- parseVar
+        keywordBy
+        keywordCases
+        keywordOn
+        var <- parseVar
+        fps <- many1 parseCases
+        keywordEnd
+        let endPos = statePos state
+        let declPos = DeclPos beginPos endPos modName
+        modifyState (\st -> st {pDecls = envAddDeriv 
+                                            (pDecls st) 
+                                            (declPos,Deriv name var fps)
+                               })
+    where
+        parseCases :: ParserD (PE.Focus, Proof)
+        parseCases = do
+                    keywordCase
+                    f <- PE.toFocus <$> parseExpr
+                    keywordRArrow
+                    p <- EquP.proof Nothing False
+                    return (f,p)
 
 -- | Parser de declaraciones.
 parseDecl :: Text -> ParserD ()
 parseDecl modName = 
-             parseLet "spec" (parseSpec modName)
-         <|> parseLet "prop" (parseProp modName)
-         <|> parseLet "fun"  (parseFun modName)
-         <|> parseLet "val"  (parseVal modName)
+             parseLet "spec"       (parseSpec modName)
+         <|> parseLet "prop"       (parseProp modName)
+         <|> parseLet "fun"        (parseFun modName)
+         <|> parseLet "val"        (parseVal modName)
+         <|> parseLet "derivation" (parseDer modName)
          <|> parseThm modName
 
 -- | Parsea una declaración en desde un string.
