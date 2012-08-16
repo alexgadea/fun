@@ -31,7 +31,11 @@ data EvRunType = Silent -- ^ No se muestra el resultado en cada paso.
 data EvalState = Init 
                | Evaluating EvRunType
                | Done
-                 deriving Show
+
+instance Show EvalState where
+    show Init = "No hay ninguna evaluación en curso."
+    show (Evaluating _) = "Se está evaluando una expresión."
+    show Done = "Ya se terminó de evaluar la expresión."
 
 -- | Parámetros para la evaluación.
 data Param = Order EvOrder
@@ -53,6 +57,7 @@ data Query = QOrder
            | QCurrentEnv
            | QInitExpr
            | QLastResult
+           | QState
              
 -- | Comandos para la máquina de estados de la consola de
 -- evaluación
@@ -116,17 +121,17 @@ getExpr cfg = cfg ^. expr
 getQry :: (Config -> a) -> (a -> IO b) -> Config -> IO Config
 getQry q p cfg = (p . q) cfg >> return cfg
 
-getInitExpr :: Run r a -> Run r (Maybe PreExpr)
-getInitExpr k = k >>= \_ -> (getExpr . fst <$> lift get)
+getInitExpr :: Run r (Maybe PreExpr)
+getInitExpr = getExpr . fst <$> lift get
 
 listen :: Run r Proof
 listen = snd <$> lift get
 
 tell :: Proof -> Run r ()
-tell p = lift (modify (second (\p' -> p' `mappend` p)))
+tell = lift . modify . second . flip mappend
 
 resetLog :: Run r ()
-resetLog = lift (modify (second (const mempty)))
+resetLog = lift . modify . second . const $ mempty
 
 
 getLastExpr :: Run r (Either String PreExpr)
@@ -135,11 +140,10 @@ getLastExpr = listen >>= \prf ->
               return (runReaderT (getEnd'' prf) (cfg ^. evEnv))
 
 updCfg :: Config -> Run r ()
-updCfg cfg = lift (modify (first (const cfg)))
+updCfg = lift . modify . first . const
 
 getCfg :: Run r Config
 getCfg = fst <$> lift get
 
 getEnv :: Config -> Env
 getEnv cfg = cfg ^. (evEnv . env)
-

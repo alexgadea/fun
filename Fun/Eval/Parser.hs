@@ -15,18 +15,20 @@ import Control.Applicative hiding (many)
 
 type ParserCmd b = ParsecT String PExprState Identity b
 
-envQP,orderQP,proofQP,exprQP,lastQP :: ParserCmd Query
+envQP,orderQP,proofQP,exprQP,lastQP,stateQP :: ParserCmd Query
 orderQP = QOrder <$ string "order"
 proofQP = QCurrentProof <$ string "proof"
 envQP = QCurrentEnv <$ string "env"
 exprQP = QInitExpr <$ string "expr"
 lastQP = QLastResult <$ string "result"
+stateQP = QState <$ string "state"
 
 queriesP = choice . map try $ [ orderQP
                               , proofQP
                               , exprQP
                               , lastQP
                               , envQP
+                              , stateQP
                               ]
 
 queryP :: ParserCmd EvCmd

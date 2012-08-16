@@ -1,6 +1,5 @@
 module Fun.Eval.Interact
     ( EvResult(..)
-    , errorInParsing
     , parserCmdCont
     , eval 
     ) where
@@ -10,8 +9,9 @@ import Text.Parsec.String
 
 import Lens.Family
 
-import Equ.PreExpr(PreExpr,toExpr)
-import Equ.Proof(Proof)
+import Equ.PreExpr(PreExpr,toExpr,toFocus)
+import Equ.Proof(Proof,getEnd)
+
 import Fun.Theory
 import Fun.Theories(funTheory)
 import Fun.Environment
@@ -28,6 +28,8 @@ import Control.Monad.Trans.Cont
 import Control.Monad.Trans.Reader
 import Control.Monad
 
+type Interact a b = IO String -> (EvResult -> IO a) -> b
+
 data ErrorInteract = ErrIntAlreadyRunning
                    | ErrIntNotRunning
                    | ErrIntOther String
@@ -41,13 +43,16 @@ instance Show ErrorInteract where
     show ErrIntNotRunning = "Primero se debe usar step o trace."
     show (ErrIntOther err) = "Error en un componente: " ++ err
 
-errorInParsing = EvErr . ErrIntOther
+errorInOther = EvErr . ErrIntOther
 
 silentOk w = liftIO . w . EvOk $ ""
 resultOk w = liftIO . w . EvOk
 
 stepPrf :: PreExpr -> EvalEnv -> IO (EvalM Proof)
 stepPrf e = return . runReaderT (evalToProof e) 
+
+evalPrf :: PreExpr -> EvalEnv -> IO (EvalM Proof)
+evalPrf e = return . runReaderT (evalF (toFocus e))
             
 notProgress :: (EvResult -> IO a) -> Config -> ErrorInteract -> IO (Config,Maybe Proof)
 notProgress w cfg err = w (EvErr err) >> return (cfg,Nothing)
@@ -56,20 +61,26 @@ notProgress' :: (EvResult -> IO a) -> Config -> ErrorInteract -> Run Config Conf
 notProgress' w cfg err = liftIO (w (EvErr err)) >> return cfg
 
 
-start :: EvalState -> (EvResult -> IO a) -> PreExpr -> Config -> IO (Config, Maybe Proof)
-start vol w e cfg | configState cfg = stepPrf e (cfg ^. evEnv) >>=
-                                      either (\err -> w (EvErr (ErrIntOther err)) >> return (cfg,Nothing)) 
-                                             (\prf -> return (cfg',Just prf))
-                  | otherwise       = notProgress w cfg ErrIntAlreadyRunning
+start :: (PreExpr -> EvalEnv -> IO (EvalM Proof)) -> EvalState -> (EvResult -> IO a) -> 
+        PreExpr -> Config -> IO (Config, Maybe Proof)
+start f vol w e cfg | configState cfg = f e (cfg ^. evEnv) >>=
+                                        either (\err -> w (EvErr (ErrIntOther err)) >> return (cfg,Nothing)) 
+                                               (\prf -> return (done prf cfg',Just prf))
+                    | otherwise       = notProgress w cfg ErrIntAlreadyRunning
     where cfg' = evState <~ vol $ (expr <~ Just e) cfg
 
 next :: (EvResult -> IO a) -> PreExpr -> Config -> IO (Config, Maybe Proof)
 next w e cfg | runningState cfg = stepPrf e (cfg ^. evEnv) >>=
                                   either (const $ w (EvErr ErrIntNotRunning) >> return (cfg,Nothing)) 
-                                         (\prf -> return (cfg,Just prf))
+                                         (\prf -> return (done prf cfg,Just prf))
              | otherwise        = notProgress w cfg ErrIntNotRunning
 
-next' :: IO String -> (EvResult -> IO a) -> Run Config Config -> Run Config Config 
+done :: Proof -> Config -> Config
+done p cfg = if proofDone p (cfg ^. evEnv)
+             then (evState <~ Done) cfg 
+             else cfg
+
+next' :: Interact a (Run Config Config -> Run Config Config)
 next' r w k = inter r w $ k >> getCfg >>= \cfg ->
                           listen >>= \prf ->
                           if not (runningState cfg) 
@@ -84,70 +95,58 @@ next' r w k = inter r w $ k >> getCfg >>= \cfg ->
                                  else silentOk w >> return c')
 
 step,trace :: (EvResult -> IO a) -> PreExpr -> Config -> IO (Config,Maybe Proof)
-step = start silentEval 
-trace = start noisyEval
+step = start stepPrf silentEval 
+trace = start stepPrf noisyEval
+evalCmd = start evalPrf noisyEval 
 
--- step' :: IO String -> (EvResult -> IO a) -> PreExpr -> Aut Config Config -> Aut Config Config
-step' r w e k = advance step r w e (silentOk w >> k)
-trace' r w e k = advance trace r w e (listen >>= resultOk w . show >> k)
+step',trace',evalCmd'  :: Interact a (PreExpr -> Run Config Config -> Run Config Config)
+step' r w = advance step (silentOk w) r w 
+trace' r w = advance trace (listen >>= resultOk w . show) r w 
+evalCmd' r w = advance evalCmd result r w
+    where result = listen >>=
+                   either (liftIO . w . errorInOther . show)
+                          (resultOk w . show . toExpr) 
+                          . getEnd
 
-advance f r w e k = inter r w (k >>= (lift . lift . f w e >=> uncurry addProofStep))
+advance :: ((EvResult -> IO a) -> PreExpr -> Config -> IO (Config, Maybe Proof))
+        -> Run Config b -> Interact a (PreExpr -> Run Config Config -> Run Config Config)
+advance f k' r w e = inter r w . withCont' (lift . lift . f w e >=>
+                                            uncurry addProofStep >=> 
+                                            const k')
 
--- TODO: SI la expresión final de la prueba es canónica, entonces
--- pasar al estado Done.
-addProofStep c = maybe (updateCfg c) (tell >=> const (updateCfg c))
+addProofStep :: Config -> Maybe Proof -> Run a Config
+addProofStep c = maybe (updateCfg c) (\p -> tell p >> updateCfg (done p c))
+    where updateCfg c = updCfg c >> return c
 
-updateCfg c = updCfg c >> return c
+withCont' :: (Config -> Run Config a) -> Run Config Config -> Run Config Config
+withCont' k' k = k >>= \cfg -> k' cfg >> return cfg
 
 inter :: (IO String) -> (EvResult -> IO a) -> Run Config Config -> Run Config Config 
-inter r w k = k >>= \cfg -> liftIO r >>= parserCmdCont r w cfg
+inter r w = withCont' (\cfg -> liftIO r >>= parserCmdCont r w cfg)
 
 parserCmdCont :: (IO String) -> (EvResult -> IO a) -> Config -> String -> Run Config Config
 parserCmdCont r w cfg = either (liftIO . w . EvErr . ErrIntOther >=> const (return cfg))
-                               (\cmd -> eval r w cmd (return cfg)) . parserCmd 
+                            (\cmd -> eval r w cmd (return cfg)) . parserCmd 
 
 -- -- | Semántica de continuaciones para nuestro lenguaje.
 eval :: IO String -> (EvResult -> IO a) -> EvCmd -> Run Config Config -> Run Config Config 
-eval r w Reset = \k -> k >>= \cfg -> silentOk w >> return cfg
-eval r w (Set p) = \k -> inter r w (k >>= \cfg -> silentOk w >> return (setParam p cfg))
+eval r w Reset = withCont' (const $ silentOk w)
+eval r w (Set p) = inter r w . (withCont' (\cfg -> silentOk w >> return (setParam p cfg)))
 eval r w (Step e) = step' r w e
 eval r w (Trace e) = trace' r w e
-eval r w (Eval e) = trace' r w e
-eval r w (Get QOrder) = \k -> inter r w (k >>= liftIO . getQry (EvOk . show . getOrder) w)
-eval r w (Get QInitExpr) = \k -> inter r w (k >>= liftIO . getQry (EvOk . show . getExpr) w)
-eval r w (Get QCurrentProof) = \k -> inter r w (k >>= \cfg -> listen >>= liftIO . w . EvOk . show >> return cfg)
-eval r w (Get QCurrentEnv) = \k -> inter r w (k >>= \cfg -> (liftIO . w . EvOk . show) (getEnv cfg) >> return cfg)
+eval r w (Eval e) = evalCmd' r w e
 eval r w Next = next' r w
-eval r w (Show e) = \k -> inter r w (k >>= \cfg -> (resultOk w . show) e >> return cfg)
-eval r w Help = \k -> inter r w (k >>= \cfg -> (resultOk w . show) Help >> return cfg)
+eval r w (Get q) = inter r w . withCont' (evalQ w q)
+eval r w (Show e) = inter r w . withCont'  (const $ resultOk w . show $ e)
+eval r w Help = inter r w . withCont' (const $ resultOk w . show $ Help)
 
--- -- -- -- | Si hay una expresión para ser evaluada, hace n pasos
--- -- -- -- de ejecución y recolecta los resultados parciales en la lista.
--- -- -- -- Si no se puede evaluar todos los pasos, se devuelve hasta
--- -- -- -- la primera forma canónica. Satisface las siguientes reglas
--- -- -- -- @trace Nothing = trace (Just 1)@
--- -- -- -- Si @trace (Just n) = trace (Just (n+1))@, entonces
--- -- -- -- @trace (Just n) = trace (Just (n+k)@ para cualquier @k>0@.
--- -- -- -- @trace n = [] <=> not <$> canGoFurther@
--- -- -- trace :: Maybe Int -> EvalM [PreExpr]
--- -- -- trace Nothing = trace (Just 1)
--- -- -- trace (Just n) = canGoFurther >>= \canEv ->
--- -- --                  if canEv then trace' n []
--- -- --                  else return []
+evalQ :: (EvResult -> IO a) -> Query -> Config -> Run Config a
+evalQ w q cfg = listen >>= liftIO . w . evalQry q cfg
 
--- -- -- trace' :: Int -> [PreExpr] -> EvalM [PreExpr]
--- -- -- trace' 0 ps = return $ reverse ps
--- -- -- trace' n ps = getExpr >>= \(Just expr) ->
--- -- --               ask >>= \env -> 
--- -- --               case runReaderT (evalToProof expr) env of
--- -- --                 Left _ -> return []
--- -- --                 Right p -> tell p >>
--- -- --                           (toExpr <$> getEnd'' p) >>= \e ->
--- -- --                           case runReaderT (isCan e) env of
--- -- --                             Left _ -> return []
--- -- --                             Right b -> if b 
--- -- --                                       then return $ reverse (e:ps)
--- -- --                                       else put (Evaluating e) >>
--- -- --                                            trace' (n-1) (e:ps)
-                             
-
+evalQry :: Query -> Config -> Proof -> EvResult
+evalQry QOrder cfg _ = EvOk $ show $ getOrder cfg
+evalQry QInitExpr cfg _ = EvOk $  show $ getExpr cfg
+evalQry QCurrentProof _ prf = EvOk $ show prf
+evalQry QCurrentEnv cfg _ = EvOk $ show $ getEnv cfg
+evalQry QState cfg _ = EvOk $ show $ cfg ^. evState
+evalQry QLastResult _ prf = either (errorInOther . ("QLastResult: "++) . show) (EvOk . show) $ getEnd prf

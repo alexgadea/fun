@@ -54,6 +54,8 @@ instance Parse Query where
                              "La expresión inicial de la evaluación actual"
     info QLastResult = mkPInfo (Simple "result")
                                "El resultado del último paso"
+    info QState = mkPInfo (Simple "state")
+                               "El estado de la evaluación"
 
 instance Show EvCmd where
     show = fmtHelp . info
