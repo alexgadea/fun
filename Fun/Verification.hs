@@ -1,18 +1,16 @@
 
-module Fun.Derivation (
-      Derivation(..)
-    , module Fun.Derivation.Monad
-    , module Fun.Derivation.Error
-    , createDerivations
-    , checkDerivation
+module Fun.Verification (
+      Verification (..)
+    , module Fun.Verification.Error
+    , createVerifications
+    , checkVerification
     )
     where
 
 import Fun.Decl
 import Fun.Declarations
-import Fun.Derivation.Derivation
-import Fun.Derivation.Monad
-import Fun.Derivation.Error
+import Fun.Verification.Verification
+import Fun.Verification.Error
 
 import Equ.Expr
 import Equ.Proof
@@ -26,19 +24,19 @@ import Data.List as L (map, find)
 import Data.Either (rights)
 import Data.Maybe (fromJust,catMaybes)
 
-createDerivations :: Declarations -> [Derivation]
-createDerivations decls = do
+createVerifications:: Declarations -> [Verification]
+createVerifications decls = do
                 let vSpecs = rights $ checkSpecs decls
                 let vFuns = rights $ checkFuns decls
                 let vThm = rights $ checkThm decls
-                let der = createDer vSpecs vFuns vThm
+                let der = createVer vSpecs vFuns vThm
                 catMaybes der
     where
-        createDer :: [SpecDecl] -> [FunDecl] -> [ThmDecl] -> [Maybe Derivation]
-        createDer specs funcs thms = 
+        createVer :: [SpecDecl] -> [FunDecl] -> [ThmDecl] -> [Maybe Verification]
+        createVer specs funcs thms = 
             L.map (\s -> L.find (equalFun s) funcs >>= \f ->
                          L.find (equalThm f) thms >>= \(Thm theo) ->
-                        Just (Derivation s f (thProof theo))) specs
+                        Just (Verification s f (thProof theo))) specs
         equalFun :: SpecDecl -> FunDecl -> Bool
         equalFun s f = getFuncDecl s == getFuncDecl f &&
                        getVarsDecl s == getVarsDecl f
@@ -46,8 +44,9 @@ createDerivations decls = do
         equalThm f t = (Just $ getNameDecl t) == getFunDerivingFrom f
 
 -- | Funcion que dada una derivacion dice si es válida o no.
-checkDerivation :: Derivation -> Either ([DerivationError], Derivation) Derivation
-checkDerivation d = 
+checkVerification :: Verification -> 
+                     Either ([VerificationError], Verification) Verification 
+checkVerification d = 
             case (checkStartExpr, checkEndExpr, checkHypExpr) of
                 ([],[],[]) -> return d
                 (sErr,eErr,hypErr) -> Left (sErr ++ eErr ++ hypErr, d)
@@ -56,7 +55,7 @@ checkDerivation d =
         prf = proof d
         prg :: PE.PreExpr
         prg = fromJust . getExprDecl $ prog d
-        checkStartExpr :: [DerivationError]
+        checkStartExpr :: [VerificationError]
         checkStartExpr = do
                 let Fun f vs _ _ = prog d
                 let fWithArgs = foldl PE.preExprApp (PE.Var f) (map PE.Var vs)
@@ -64,13 +63,13 @@ checkDerivation d =
                 if fWithArgs == PE.toExpr ei 
                    then []
                    else [InvalidStartOfProof fWithArgs (PE.toExpr ei)]
-        checkEndExpr :: [DerivationError]
+        checkEndExpr :: [VerificationError]
         checkEndExpr = do
                 let Right ef = getEnd prf
                 if prg == PE.toExpr ef
                    then []
                    else [InvalidEndOfProof prg (PE.toExpr ef)]
-        checkHypExpr :: [DerivationError]
+        checkHypExpr :: [VerificationError]
         checkHypExpr = do
                 let Right ctx = getCtx prf
                 let Right rel = getRel prf

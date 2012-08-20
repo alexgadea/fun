@@ -75,8 +75,8 @@ keywordProof :: ParserD ()
 keywordProof = keyword "proof"
 keywordImport :: ParserD ()
 keywordImport = keyword "import"
-keywordDeriving :: ParserD ()
-keywordDeriving = keyword "deriving"
+keywordVerified :: ParserD ()
+keywordVerified = keyword "verified"
 keywordFrom :: ParserD ()
 keywordFrom = keyword "from"
 keywordLet :: ParserD ()

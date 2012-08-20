@@ -1,7 +1,6 @@
 module Fun.Module.Error where
 
-import Fun.Derivation
-import Fun.Derivation.Error
+import Fun.Verification
 import Fun.Decl.Error
 import Fun.Parser
 
@@ -18,7 +17,7 @@ data ModuleError = ModuleParseError ParseError
                     , mErrFuns  :: [ErrInDecl FunDecl]
                     , mErrVals  :: [ErrInDecl ValDecl]
                     , mErrThm   :: [ErrInDecl ThmDecl]
-                    , mErrDer   :: [ErrInDeriv Derivation]
+                    , mErrVer   :: [ErrInVerif Verification]
                     }
 
 instance Show ModuleError where
@@ -36,7 +35,7 @@ instance Show ModuleError where
                      , "Funs con error: " ++  show (mErrFuns m)
                      , "Vals con error: " ++  show (mErrVals m)
                      , "Thm con error: " ++  show (mErrThm m)
-                     , "Der con error: " ++  show (mErrDer m)
+                     , "Ver con error: " ++  show (mErrVer m)
                      , "===================================="
                      ]
 
@@ -47,10 +46,10 @@ instance Eq ModuleError where
               mErrFuns m == mErrFuns m' &&
               mErrVals m == mErrVals m' &&
               mErrThm m == mErrThm m' &&
-              mErrDer m == mErrDer m'
+              mErrVer m == mErrVer m'
 
 createError :: Text -> ([ErrInDecl SpecDecl], [ErrInDecl FunDecl], 
                 [ErrInDecl ValDecl], [ErrInDecl ThmDecl], 
-                [ErrInDeriv Derivation]) -> ModuleError
+                [ErrInVerif Verification]) -> ModuleError
 createError name (errSpecs, errFuns, errVals, errThm, errDer) = 
                 ModuleError name errSpecs errFuns errVals errThm errDer

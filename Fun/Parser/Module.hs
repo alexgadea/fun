@@ -10,7 +10,7 @@ import Text.Parsec
 import Fun.Parser.Internal
 import Fun.Parser.Import
 import Fun.Parser.Decl
-import Fun.Derivation
+import Fun.Verification
 import Fun.Module
 
 -- | Parser de modulos de fun.
@@ -21,7 +21,7 @@ parseModule = do
             imports <- manyTill parseImport (parseDecl mName)
             manyTill (parseDecl mName <|> parseComments) eof
             st <- getState
-            let ders = createDerivations $ pDecls st
+            let ders = createVerifications $ pDecls st
             return $ Module mName imports (pDecls st) ders
     where
         parseComments :: ParserD ()

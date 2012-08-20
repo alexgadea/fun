@@ -1,17 +1,17 @@
-module Fun.Derivation.Error where
+module Fun.Verification.Error where
 
 import Equ.PreExpr
 import Equ.Expr
 
-type ErrInDeriv d = ([DerivationError],d)
+type ErrInVerif d = ([VerificationError],d)
 
 -- | Errores sobre las derivaciones.
-data DerivationError = InvalidStartOfProof PreExpr PreExpr
-                     | InvalidEndOfProof PreExpr PreExpr
-                     | MissingSpecHypInProof Expr
+data VerificationError = InvalidStartOfProof PreExpr PreExpr
+                       | InvalidEndOfProof PreExpr PreExpr
+                       | MissingSpecHypInProof Expr
     deriving Eq
 
-instance Show DerivationError where
+instance Show VerificationError where
     show (InvalidStartOfProof eInF eInp) = 
             "La expresión incial " ++ show eInp ++ 
             " de la prueba no se corresponde la función " ++ show eInF

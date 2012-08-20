@@ -137,7 +137,7 @@ parseSF ecnstr modName = getParserState >>= \state ->
             modifyState (\st -> 
                     st {pDecls = envAddFun (pDecls st) (declPos,cnstr fun vs e mname)}) 
         parseTheoName :: ParserD (Maybe Text)
-        parseTheoName = Just <$> (keywordDeriving >> keywordFrom >> parseName)
+        parseTheoName = Just <$> (keywordVerified >> keywordFrom >> parseName)
         parseS :: Variable -> S -> [Variable] -> SourcePos -> ParserD ()
         parseS fun cnstr vs beginPos = do
             e <- parseExpr
@@ -222,7 +222,7 @@ parseVal modName = parseVar >>= \v -> getParserState >>= \state ->
     where 
         parseVarWithoutType :: Variable -> SourcePos -> Text -> ParserD ()
         parseVarWithoutType v beginPos modName = try $
-                keyword "=" >> parseExpr -- Nothing tryNewline 
+                keyword "=" >> parseExpr
                 >>= \e ->
                 many (whites <|> tryNewline) >> 
                 getParserState >>= \state ->
@@ -254,6 +254,7 @@ parseProp modName = do
                                             (declPos,Prop name e)
                                 })
 
+-- | Parser de derivaciones.
 parseDer :: Text -> ParserD ()
 parseDer modName = do
         state <- getParserState
@@ -268,8 +269,8 @@ parseDer modName = do
         let endPos = statePos state
         let declPos = DeclPos beginPos endPos modName
         modifyState (\st -> st {pDecls = envAddDeriv 
-                                            (pDecls st) 
-                                            (declPos,Deriv name var fps)
+                                          (pDecls st) 
+                                          (declPos,Deriv name var $ reverse fps)
                                })
     where
         parseCases :: ParserD (PE.Focus, Proof)

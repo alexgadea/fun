@@ -7,7 +7,7 @@ import Fun.Parser.Internal
 import Fun.Parser.Module
 import Fun.Decl(FunDecl)
 import Fun.Declarations
-import Fun.Derivation
+import Fun.Verification
 
 import Data.Either (lefts)
 import qualified Data.List as L (map,elem,filter,notElem,nub)
@@ -103,7 +103,8 @@ checkModule m = do
     let invalidFuns = lefts $ checkFuns  moduleDecls
     let invalidVals = lefts $ checkVals  moduleDecls
     let invalidThm  = lefts $ checkThm   moduleDecls
-    let invalidDers = lefts $ L.map checkDerivation $ derivations m
+    let invalidDers = lefts $ L.map checkVerification $ verifications m
+    
 
     case (invalidSpec, invalidFuns, invalidVals, invalidThm, invalidDers) of
         ([],[],[],[],[]) -> modify (id *** addModuleEnv m) >> return Nothing
@@ -111,7 +112,7 @@ checkModule m = do
 
 extractDeclImported :: Module -> Environment -> Declarations
 extractDeclImported m env = 
-            foldl concatDeclarations (decls m) imDecls
+            foldl concatDeclarations    (decls m) imDecls
     where
         imMods :: Module -> [Module]
         imMods m = L.filter (\m' -> Import (modName m') `L.elem` imports m) env

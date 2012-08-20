@@ -1,22 +1,22 @@
 
 module Fun.Module where
 
+import Fun.Verification
 import Fun.Declarations
-import Fun.Derivation
 
 import Data.Text (Text)
 
 type ModName = Text
 
-data Module = Module { modName :: ModName
-                     , imports :: [Import]
-                     , decls   :: Declarations
-                     , derivations :: [Derivation]
+data Module = Module { modName       :: ModName
+                     , imports       :: [Import]
+                     , decls         :: Declarations
+                     , verifications :: [Verification]
                      }
 
 instance Eq Module where
     m == m' = modName m == modName m'
-            
+
 instance Show Module where
     show m = unlines [ "\n========LoadModule========="
                      , "ModName: " ++ show (modName m)
@@ -24,7 +24,7 @@ instance Show Module where
                      , ""
                      , "Decls: " ++ show (decls m)
                      , ""
-                     , "Derivations: " ++ show (derivations m)
+                     , "Verifications : " ++ show (verifications m)
                      , "=========================="
                      ]
 
@@ -32,4 +32,4 @@ data Import = Import ModName
     deriving (Eq, Show)
 
 addDerivationsModule :: Module -> Module
-addDerivationsModule m = m {derivations = createDerivations (decls m)} 
+addDerivationsModule m = m {verifications = createVerifications (decls m)} 
