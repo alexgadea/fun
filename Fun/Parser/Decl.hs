@@ -12,7 +12,7 @@ import qualified Equ.Parser as EquP ( parsePreExpr
                                     , initPExprState
                                     , PProofState 
                                     , PExprState
-                                    , pProofSet, lastProofName
+                                    , pTheoSet, lastProofName
                                     , EitherName
                                     , ParenFlag(UseParen,UnusedParen)
                                     , PExprStateClass (..)
@@ -203,11 +203,12 @@ parseThm modName = do
 -- | Agrega un teorema parseado al estado de parseo de teoremas.
 addTheorem :: EquP.PProofState -> Text -> Proof -> EquP.PProofState
 addTheorem pst pn p = 
-        let proofSet = EquP.pProofSet pst in
-            case M.lookup pn proofSet of
-                (Just (Just _)) -> pst
-                _ -> let proofSetUpdated = M.insert pn (Just p) proofSet in
-                            pst {EquP.pProofSet = proofSetUpdated}
+        let theoSet = EquP.pTheoSet pst in
+            case M.lookup pn theoSet of
+                (Just _) -> pst
+                _ -> let theo = createTheorem pn p
+                         proofSetUpdated = M.insert pn theo theoSet 
+                     in pst {EquP.pTheoSet = proofSetUpdated}
 
 -- | Parser para declaracion de valores.
 {- | Comprobaciones al parsear:
@@ -299,5 +300,5 @@ parseFromStringDecl = runParser (parseDecl $ pack "") initPState ""
 initPState :: PDeclState
 initPState = PDeclState { pDecls = initDeclarations
                         , pExprs = EquP.initPExprState EquP.UnusedParen
-                        , pProofs = EquP.initPProofState $ EquP.initPExprState EquP.UnusedParen
+                        , pProofs = EquP.initPProofState M.empty $ EquP.initPExprState EquP.UnusedParen
                         }
