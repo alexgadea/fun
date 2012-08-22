@@ -8,6 +8,7 @@ import Fun.Parser.Module
 import Fun.Decl(FunDecl)
 import Fun.Declarations
 import Fun.Verification
+import Fun.Derivation
 
 import Data.Either (lefts)
 import qualified Data.List as L (map,elem,filter,notElem,nub)
@@ -19,6 +20,7 @@ import Control.Monad (foldM)
 import Data.Functor.Identity
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.State
+import Data.Either (partitionEithers)
 
 import Prelude hiding (catch)
 import qualified Control.Exception as C
@@ -103,12 +105,21 @@ checkModule m = do
     let invalidFuns = lefts $ checkFuns  moduleDecls
     let invalidVals = lefts $ checkVals  moduleDecls
     let invalidThm  = lefts $ checkThm   moduleDecls
-    let invalidDers = lefts $ L.map checkVerification $ verifications m
+    let invalidVers = lefts $ L.map checkVerification $ verifications m
+    -- buscamos las derivaciones. Si hay derivaciones sin especificación, o
+    -- derivaciones repetidas, entonces la lista eDerivs tendrá errores de derivación.
+    let eDerivs = createDerivations moduleDecls
+    let checkedDerivs = partitionEithers $ L.map checkDerivation eDerivs
     
 
-    case (invalidSpec, invalidFuns, invalidVals, invalidThm, invalidDers) of
-        ([],[],[],[],[]) -> modify (id *** addModuleEnv m) >> return Nothing
-        mErrs -> return . Just $ createError (modName m) mErrs
+    case (invalidSpec, invalidFuns, invalidVals, invalidThm, invalidVers,checkedDerivs) of
+        ([],[],[],[],[],([],cderivs)) -> 
+            -- Agregamos al modulo las definiciones de funciones derivadas
+            return (m { decls = moduleDecls { functions = (functions moduleDecls) 
+                                            ++ cderivs } }) >>= \m' ->
+            modify (id *** addModuleEnv m') >> return Nothing
+        (e1,e2,e3,e4,e5,(e6,_)) -> return . Just $ createError (modName m) 
+                                                    (e1,e2,e3,e4,e5,e6)
 
 extractDeclImported :: Module -> Environment -> Declarations
 extractDeclImported m env = 

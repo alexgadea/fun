@@ -97,6 +97,9 @@ keywordCase :: ParserD ()
 keywordCase = keyword "case"
 keywordRArrow :: ParserD ()
 keywordRArrow = keyword "->"
+keywordRecursion :: ParserD ()
+keywordRecursion = keyword "recursion"
+
 
 whites :: ParserD ()
 whites = whiteSpace lexer

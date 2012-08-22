@@ -26,9 +26,9 @@ import Data.Maybe (fromJust,catMaybes)
 
 createVerifications:: Declarations -> [Verification]
 createVerifications decls = do
-                let vSpecs = rights $ checkSpecs decls
-                let vFuns = rights $ checkFuns decls
-                let vThm = rights $ checkThm decls
+                let vSpecs = map snd $ specs decls
+                let vFuns = map snd $ functions decls
+                let vThm = map snd $ theorems decls
                 let der = createVer vSpecs vFuns vThm
                 catMaybes der
     where

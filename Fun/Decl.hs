@@ -8,6 +8,7 @@ import Equ.Proof
 import Equ.Types
 import Equ.Expr
 import Data.Text hiding (map,all)
+import Fun.Decl.Error
 
 -- | Declaraciones en Fun
 data SpecDecl = Spec Variable [Variable] PE.PreExpr
@@ -28,7 +29,7 @@ data ThmDecl = Thm Theorem
 instance Eq ThmDecl where
     thm == thm' = getNameDecl thm == getNameDecl thm'
 
-data FunDecl = Fun Variable [Variable] PE.PreExpr (Maybe Text) -- Puede tener la derivación o no.
+data FunDecl = Fun Variable [Variable] PE.PreExpr (Maybe Text) -- Puede tener la verificación o no.
     deriving Show
 
 instance Eq FunDecl where

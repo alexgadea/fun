@@ -3,6 +3,7 @@ module Fun.Module where
 
 import Fun.Verification
 import Fun.Declarations
+import Fun.Derivation
 
 import Data.Text (Text)
 
@@ -12,6 +13,7 @@ data Module = Module { modName       :: ModName
                      , imports       :: [Import]
                      , decls         :: Declarations
                      , verifications :: [Verification]
+                     , derivations :: [Derivation]
                      }
 
 instance Eq Module where

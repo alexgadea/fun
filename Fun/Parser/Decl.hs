@@ -262,7 +262,7 @@ parseDer modName = do
         let beginPos = statePos state
         name <- parseVar
         keywordBy
-        keywordCases
+        keywordRecursion
         keywordOn
         var <- parseVar
         fps <- many1 parseCases
