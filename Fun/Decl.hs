@@ -7,8 +7,11 @@ import Equ.Rule
 import Equ.Proof
 import Equ.Types
 import Equ.Expr
+import Equ.TypeChecker (getType)
+import Equ.Theories (createHypothesis,makeExprFromRelation)
 import Data.Text hiding (map,all)
 import Fun.Decl.Error
+import Data.Text (pack,unpack,Text)
 
 -- | Declaraciones en Fun
 data SpecDecl = Spec Variable [Variable] PE.PreExpr
@@ -66,6 +69,7 @@ class Decl a where
     getExprDecl   :: a -> Maybe PE.PreExpr
     getVarsDecl   :: a -> Maybe [Variable]
     getFocusProof :: a -> Maybe [(PE.Focus,Proof)]
+    createHypDecl :: a -> Maybe Hypothesis
 
 instance Decl SpecDecl where
     getNameDecl (Spec f _ _) = tRepr f
@@ -73,13 +77,20 @@ instance Decl SpecDecl where
     getExprDecl (Spec _ _ e) = Just e
     getVarsDecl (Spec _ vs _) = Just vs
     getFocusProof _ = Nothing
-    
+    createHypDecl (Spec f vs e) = 
+        getType e >>= \te -> return (getRelationFromType te) >>= \rel ->
+        return $ createHypothesis (pack $ "spec "++show f)
+                                  (makeExprFromRelation rel (PE.exprApply f vs) e)
+                                  (GenConditions [])
 instance Decl PropDecl where
     getNameDecl (Prop t _) = t
     getFuncDecl _ = Nothing
     getExprDecl (Prop _ e) = Just e
     getVarsDecl _ = Nothing
     getFocusProof _ = Nothing
+    createHypDecl (Prop t e) =
+        Just $ createHypothesis (pack $ "prop "++ show t)
+                                (Expr e) (GenConditions [])
     
 instance Decl ThmDecl where
     getNameDecl (Thm t) =  truthName t
@@ -87,6 +98,8 @@ instance Decl ThmDecl where
     getExprDecl (Thm t) = let (Expr p) = thExpr t in Just p
     getVarsDecl _ = Nothing
     getFocusProof _ = Nothing
+    createHypDecl (Thm t) = 
+        Just $ createHypothesis (truthName t) (thExpr t) (GenConditions [])
     
 instance Decl FunDecl where
     getNameDecl (Fun f _ _ _) =  tRepr f
@@ -94,6 +107,11 @@ instance Decl FunDecl where
     getExprDecl (Fun _ _ p _) = Just p
     getVarsDecl (Fun _ vs _ _) = Just vs
     getFocusProof _ = Nothing
+    createHypDecl (Fun f vs e _) = 
+        getType e >>= \te -> return (getRelationFromType te) >>= \rel ->
+        return $ createHypothesis (pack $ "fun "++show f)
+                                  (makeExprFromRelation rel (PE.exprApply f vs) e)
+                                  (GenConditions [])
     
 instance Decl ValDecl where
     getNameDecl (Val v _) =  tRepr v
@@ -101,6 +119,11 @@ instance Decl ValDecl where
     getExprDecl (Val _ p) = Just p
     getVarsDecl _ = Nothing
     getFocusProof _ = Nothing
+    createHypDecl (Val v e) =
+        getType e >>= \te -> return (getRelationFromType te) >>= \rel ->
+        return $ createHypothesis (pack $ "val "++ show v)
+                                  (makeExprFromRelation rel (PE.Var v) e)
+                                  (GenConditions [])
 
 instance Decl DerivDecl where
     getNameDecl   (Deriv v _ _) = tRepr v
@@ -108,6 +131,7 @@ instance Decl DerivDecl where
     getVarsDecl   (Deriv _ v _) = Just [v]
     getFocusProof (Deriv _ _ fps) = Just fps
     getExprDecl _ = Nothing
+    createHypDecl (Deriv _ _ _) = Nothing
 
 instance Decl TypeDecl where
     getNameDecl _ =  pack ""
@@ -126,3 +150,4 @@ isPrg (PE.If c e1 e2) = isPrg c && isPrg e1 && isPrg e2
 isPrg (PE.Case e patterns) = isPrg e && all (\(p,e) -> isPrg p && isPrg e) patterns
 isPrg (PE.Paren pe) = isPrg pe
 isPrg _ = True
+
