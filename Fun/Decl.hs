@@ -32,6 +32,7 @@ instance Eq ThmDecl where
 data FunDecl = Fun Variable [Variable] PE.PreExpr (Maybe Text) -- Puede tener la verificación o no.
     deriving Show
 
+-- POR QUE ESTA INSTANCIA ESTA DEFINIDA ASI??????
 instance Eq FunDecl where
     (Fun f _ _ _) == (Fun f' _ _ _) = f == f'
 

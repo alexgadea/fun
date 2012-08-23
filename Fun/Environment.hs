@@ -115,7 +115,7 @@ checkModule m = do
     case (invalidSpec, invalidFuns, invalidVals, invalidThm, invalidVers,checkedDerivs) of
         ([],[],[],[],[],([],cderivs)) -> 
             -- Agregamos al modulo las definiciones de funciones derivadas
-            return (m { decls = moduleDecls { functions = (functions moduleDecls) 
+            return (m { decls = (decls m) { functions = (functions moduleDecls) 
                                             ++ cderivs } }) >>= \m' ->
             modify (id *** addModuleEnv m') >> return Nothing
         (e1,e2,e3,e4,e5,(e6,_)) -> return . Just $ createError (modName m) 
