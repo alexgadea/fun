@@ -36,9 +36,9 @@ instance Show ModuleError where
                      , "Specs con error: " ++  show (mErrSpecs m)
                      , "Funs con error: " ++  show (mErrFuns m)
                      , "Vals con error: " ++  show (mErrVals m)
-                     , "Thm con error: " ++  show (mErrThm m)
-                     , "Ver con error: " ++  show (mErrVer m)
-                     , "Derivations con error : " ++ show (mErrDeriv m)
+                     , "Thms con error: " ++  show (mErrThm m)
+                     , "Vers con error: " ++  show (mErrVer m)
+                     , "Ders con error : " ++ show (mErrDeriv m)
                      , "===================================="
                      ]
 

@@ -1,4 +1,4 @@
-
+-- | Define la noción de corrección para una derivación.
 module Fun.Verification (
       Verification (..)
     , module Fun.Verification.Error
@@ -24,8 +24,11 @@ import Data.List as L (map, find)
 import Data.Either (rights)
 import Data.Maybe (fromJust,catMaybes)
 
-createVerifications:: Declarations -> [Verification]
-createVerifications decls = do
+-- | Crea una verificación, esto es, una especificación de una función,
+-- la función y una prueba de corrección de que la función se derivo en
+-- base a la especificación.
+createVerifications:: Declarations -> Maybe Declarations -> [Verification]
+createVerifications decls imds = do
                 let vSpecs = map snd $ specs decls
                 let vFuns = map snd $ functions decls
                 let vThm = map snd $ theorems decls

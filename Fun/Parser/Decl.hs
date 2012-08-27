@@ -86,7 +86,7 @@ parseLet s parse = try $ do many newline
 
 -- | Parsea nombres que comienzan con minuscula.
 parseName :: ParserD Text
-parseName = lower >>= \lc -> (pack . (lc :)) <$> (many1 letter)
+parseName = lower >>= \lc -> (pack . (lc :)) <$> many1 letter
 
 parseVar :: ParserD Variable
 parseVar = EquP.parseVariable
@@ -103,7 +103,7 @@ parseFuncPreExpr = EquP.parseVariable
 -}
 parseSF :: UnifySF -> Text -> ParserD ()
 parseSF ecnstr modName = getParserState >>= \state -> 
-                         try (parseFuncPreExpr) >>= \fun -> 
+                         try parseFuncPreExpr >>= \fun -> 
                          let pst = statePos state in
                          parseFunWithType fun pst <|> 
                          parseFunWithoutType fun pst

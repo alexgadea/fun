@@ -1,3 +1,5 @@
+-- | Define la noción de derivación de una función en base a una especificación
+-- y una prueba, es decir, una derivación propia de la función.
 module Fun.Derivation (
       Derivation (..)
     , module Fun.Derivation.Error
@@ -34,8 +36,8 @@ import System.IO.Unsafe (unsafePerformIO)
 -- | A partir de las declaraciones, crea los objetos "Derivation" juntando la informacion
 --   de cada especificación con la correspondiente derivación y def de función en caso que
 --   ocurra. Por ahora no se puede hacer más de una derivación de una misma especificación.
-createDerivations:: Declarations -> [EDeriv]
-createDerivations decls =
+createDerivations:: Declarations -> Maybe Declarations -> [EDeriv]
+createDerivations decls dswi =
     -- Obtenemos las declaraciones parseadas
     let pDerivs = derivs decls in
         let pSpecs = L.map snd $ specs decls in

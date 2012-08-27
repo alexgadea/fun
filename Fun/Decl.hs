@@ -78,10 +78,10 @@ instance Decl SpecDecl where
     getVarsDecl (Spec _ vs _) = Just vs
     getFocusProof _ = Nothing
     createHypDecl (Spec f vs e) = 
-        getType e >>= \te -> return (getRelationFromType te) >>= \rel ->
+        getType e >>= \te -> (\rel ->
         return $ createHypothesis (pack $ "spec "++show f)
                                   (makeExprFromRelation rel (PE.exprApply f vs) e)
-                                  (GenConditions [])
+                                  (GenConditions [])) (getRelationFromType te)
 instance Decl PropDecl where
     getNameDecl (Prop t _) = t
     getFuncDecl _ = Nothing
@@ -108,10 +108,10 @@ instance Decl FunDecl where
     getVarsDecl (Fun _ vs _ _) = Just vs
     getFocusProof _ = Nothing
     createHypDecl (Fun f vs e _) = 
-        getType e >>= \te -> return (getRelationFromType te) >>= \rel ->
+        getType e >>= \te -> (\rel ->
         return $ createHypothesis (pack $ "fun "++show f)
                                   (makeExprFromRelation rel (PE.exprApply f vs) e)
-                                  (GenConditions [])
+                                  (GenConditions [])) (getRelationFromType te)
     
 instance Decl ValDecl where
     getNameDecl (Val v _) =  tRepr v
@@ -120,10 +120,10 @@ instance Decl ValDecl where
     getVarsDecl _ = Nothing
     getFocusProof _ = Nothing
     createHypDecl (Val v e) =
-        getType e >>= \te -> return (getRelationFromType te) >>= \rel ->
+        getType e >>= \te -> (\rel ->
         return $ createHypothesis (pack $ "val "++ show v)
                                   (makeExprFromRelation rel (PE.Var v) e)
-                                  (GenConditions [])
+                                  (GenConditions [])) (getRelationFromType te)
 
 instance Decl DerivDecl where
     getNameDecl   (Deriv v _ _) = tRepr v
@@ -139,6 +139,7 @@ instance Decl TypeDecl where
     getExprDecl _ = Nothing
     getVarsDecl _ = Nothing
     getFocusProof _ = Nothing
+    createHypDecl _ = Nothing
 
 isPrg :: PE.PreExpr -> Bool
 isPrg (PE.Quant _ _ _ _) = False
@@ -150,4 +151,3 @@ isPrg (PE.If c e1 e2) = isPrg c && isPrg e1 && isPrg e2
 isPrg (PE.Case e patterns) = isPrg e && all (\(p,e) -> isPrg p && isPrg e) patterns
 isPrg (PE.Paren pe) = isPrg pe
 isPrg _ = True
-

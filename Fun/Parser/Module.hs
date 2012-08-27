@@ -21,8 +21,7 @@ parseModule = do
             imports <- manyTill parseImport (parseDecl mName)
             manyTill (parseDecl mName <|> parseComments) eof
             st <- getState
-            let ders = createVerifications $ pDecls st
-            return $ Module mName imports (pDecls st) ders []
+            return $ Module mName imports (pDecls st) [] []
     where
         parseComments :: ParserD ()
         parseComments = many1 ( lineComment 

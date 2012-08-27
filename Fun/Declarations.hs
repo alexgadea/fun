@@ -2,8 +2,11 @@
 module Fun.Declarations where
 
 import Equ.Syntax hiding (Func)
+import Equ.Theories (createHypothesis)
 import qualified Equ.PreExpr as PE (PreExpr, freeVars)
-import Equ.Proof
+import Equ.Proof hiding (setCtx, getCtx)
+import Equ.Proof.Proof
+import Equ.Proof.Condition
 import Equ.Types
 
 import Fun.Theories
@@ -12,16 +15,18 @@ import Fun.Decl
 import Fun.Decl.Error
 import Equ.IndType
 
-import qualified Data.List as L (map,elem,delete,filter,concatMap)
+import qualified Data.List as L (map,elem,delete,filter,concatMap, foldl,length)
 import qualified Data.Set as S (toList)
 import qualified Data.Map as M
-import Data.Text hiding (map,concatMap,unlines)
-import Data.Either (lefts)
-import Data.Maybe (fromJust,fromMaybe)
+import Data.Text hiding (map,concatMap,unlines,reverse)
+import Data.Either (lefts,partitionEithers)
+import Data.Maybe (fromJust,fromMaybe,mapMaybe)
 
 import Text.Parsec.Pos (newPos)
 
 import Control.Monad
+
+import System.IO.Unsafe
 
 data CDoubleType = CDSpec | CDFun | CDThm | CDProp | CDVal
     deriving Eq
@@ -90,25 +95,33 @@ valsDef = L.map (\(_,Val v _) -> v) . vals
 funcsDef :: Declarations -> [Variable]
 funcsDef = L.map (\(_,Fun f _ _ _) -> f) . functions
 
-checkSpecs :: Declarations -> [Either (ErrInDecl SpecDecl) SpecDecl]
-checkSpecs ds = 
+checkSpecs :: Declarations -> Maybe Declarations -> 
+              [Either (ErrInDecl SpecDecl) SpecDecl]
+checkSpecs ds imds = 
         L.map (\(dPos,spec) ->
-            case (checkDefVar spec ds, checkDoubleDef CDSpec (dPos,spec) ds) of
+            case (checkDefVar spec dswi, checkDoubleDef CDSpec (dPos,spec) dswi) of
                 ([],[]) -> Right spec
                 (vErrs,dErrs) -> Left $ ErrInDecl dPos (vErrs++dErrs) spec
               ) specsDefs
     where
+        -- Grupo de declaraciones de un módulos mas las de sus imports
+        dswi :: Declarations 
+        dswi = maybe ds (concatDeclarations ds) imds
         specsDefs :: [(DeclPos,SpecDecl)]
         specsDefs = specs ds
 
-checkFuns :: Declarations -> [Either (ErrInDecl FunDecl) FunDecl]
-checkFuns ds = 
+checkFuns :: Declarations -> Maybe Declarations -> 
+             [Either (ErrInDecl FunDecl) FunDecl]
+checkFuns ds imds = 
     L.map (\(dPos,fun) -> 
-    case (checkDefVar fun ds, checkDoubleDef CDFun (dPos,fun) ds, checkIsPrg fun) of
+    case (checkDefVar fun dswi, checkDoubleDef CDFun (dPos,fun) dswi, checkIsPrg fun) of
         ([],[],True) -> Right fun
         (vErrs,dErrs,isP) -> Left $ ErrInDecl dPos (makeError isP (vErrs ++ dErrs)) fun
           ) funsDefs
     where
+        -- Grupo de declaraciones de un módulos mas las de sus imports
+        dswi :: Declarations 
+        dswi = maybe ds (concatDeclarations ds) imds
         funsDefs :: [(DeclPos,FunDecl)]
         funsDefs = functions ds
         makeError :: Bool -> [DeclError] -> [DeclError]
@@ -116,25 +129,65 @@ checkFuns ds =
                                 then errs
                                 else errs ++ [InvalidPrgDeclaration] 
 
-checkThm :: Declarations -> [Either (ErrInDecl ThmDecl) ThmDecl]
-checkThm ds = 
-        L.map (\(dPos,thm@(Thm p)) -> 
-            case (checkDoubleDef CDThm (dPos,thm) ds, validateProof (thProof p)) of
-                ([],Right _) -> Right thm
-                (dErrs,eiErrs) -> Left $ ErrInDecl dPos (dErrs++makeError eiErrs) thm
-              ) thmDefs
+checkThm :: Declarations -> Maybe Declarations ->
+            [Either (ErrInDecl ThmDecl) ThmDecl]
+checkThm ds imds = 
+        L.foldl (\prevThms (dPos,thm@(Thm p)) -> 
+            do
+            let (errThms,rThms) = partitionEithers prevThms
+            let proofWithThms   = addHyps (thProof p) (rThms ++ imThms)
+            let proofWithDecls  = addDeclsHyps proofWithThms
+            case (checkDoubleDef CDThm (dPos,thm) dswi, validateProof proofWithDecls) of
+                ([],Right _) -> Right thm : prevThms
+                (dErrs,eiErrs) -> (Left $ ErrInDecl dPos (dErrs++makeError eiErrs) thm) : prevThms
+                ) [] thmDefs
     where
+        hypsSpecs :: [Hypothesis]
+        hypsSpecs = mapMaybe (createHypDecl . snd) $ specs dswi
+        hypsFuns :: [Hypothesis]
+        hypsFuns = mapMaybe (createHypDecl . snd) $ functions dswi
+        hypsVals :: [Hypothesis]
+        hypsVals = mapMaybe (createHypDecl . snd) $ vals dswi
+        hypsProps :: [Hypothesis]
+        hypsProps = mapMaybe (createHypDecl . snd) $ props dswi
+        hypsDecls :: [Hypothesis]
+        hypsDecls = hypsFuns ++ hypsSpecs ++ hypsVals ++ hypsProps
+        addDeclsHyps :: Proof -> Proof
+        addDeclsHyps p = L.foldl (\p hyp -> fromJust $ addDeclsHyp p hyp) p hypsDecls
+        addDeclsHyp :: Proof -> Hypothesis -> Maybe Proof
+        addDeclsHyp p hyp = do
+                    ctx <- getCtx p
+                    let updateCtx = addHypothesis' hyp ctx
+                    setCtx updateCtx p
+        imThms :: [ThmDecl]
+        imThms = maybe [] (map snd . theorems) imds
+        -- Grupo de declaraciones de un módulos mas las de sus imports
+        dswi :: Declarations 
+        dswi = maybe ds (concatDeclarations ds) imds
+        addHyps :: Proof -> [ThmDecl] -> Proof
+        addHyps = L.foldl (\ p thm -> fromJust $ addHyp p thm)
+        addHyp :: Proof -> ThmDecl -> Maybe Proof
+        addHyp p (Thm t) = do
+                    ctx <- getCtx p
+                    let hyp = createHypothesis (thName t) (thExpr t) (GenConditions [])
+                    let updateCtx = addHypothesis' hyp ctx
+                    setCtx updateCtx p
         thmDefs :: [(DeclPos,ThmDecl)]
-        thmDefs = theorems ds
+        thmDefs = reverse $ theorems ds
         makeError :: Either ProofError Proof -> [DeclError]
         makeError = either (\p -> [InvalidProofForThm p]) (const [])
 
-checkVals :: Declarations -> [Either (ErrInDecl ValDecl) ValDecl]
-checkVals ds =  L.map (\(dPos,val) -> 
-                case (checkDefVar val ds,checkDoubleDef CDVal (dPos,val) ds) of
+checkVals :: Declarations -> Maybe Declarations ->
+             [Either (ErrInDecl ValDecl) ValDecl]
+checkVals ds imds =  
+            L.map (\(dPos,val) -> 
+                case (checkDefVar val dswi,checkDoubleDef CDVal (dPos,val) dswi) of
                     ([],[])-> Right val
                     (vErrs,dErrs) -> Left $ ErrInDecl dPos (vErrs++dErrs) val) valsDefs
     where
+        -- Grupo de declaraciones de un módulos mas las de sus imports
+        dswi :: Declarations 
+        dswi = maybe ds (concatDeclarations ds) imds
         valsDefs :: [(DeclPos,ValDecl)]
         valsDefs = vals ds
         funDefs :: [(DeclPos,FunDecl)]

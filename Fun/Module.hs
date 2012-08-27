@@ -1,4 +1,4 @@
-
+-- | Definimos la noción de módulo de fun.
 module Fun.Module where
 
 import Fun.Verification
@@ -13,7 +13,7 @@ data Module = Module { modName       :: ModName
                      , imports       :: [Import]
                      , decls         :: Declarations
                      , verifications :: [Verification]
-                     , derivations :: [Derivation]
+                     , derivations   :: [Derivation]
                      }
 
 instance Eq Module where
@@ -32,6 +32,3 @@ instance Show Module where
 
 data Import = Import ModName
     deriving (Eq, Show)
-
-addDerivationsModule :: Module -> Module
-addDerivationsModule m = m {verifications = createVerifications (decls m)} 

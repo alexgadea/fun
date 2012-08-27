@@ -35,6 +35,7 @@ Library
                             Fun.Environment, 
                             Fun.Module,
                             Fun.Module.Error,
+                            Fun.Module.Graph,
                             Fun.Parser, 
                             Fun.Parser.Decl,
                             Fun.Parser.Import,
@@ -47,6 +48,7 @@ Library
     Build-depends:          base >= 4.2, text >= 0.11.1.5, 
                             containers >= 0.4.0.0, equ >= 0.2, 
                             parsec >= 3.1.1, transformers >= 0.2.2.0,
-                            lens-family-core,lens-family-th
+                            lens-family-core,lens-family-th,
+                            fgl >= 5.4.2.4
     
     GHC-Options:         -Odph -Wall
