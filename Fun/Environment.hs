@@ -14,7 +14,7 @@ import Fun.Declarations
 import Fun.Verification
 import Fun.Derivation
 
-import Data.Either (lefts,partitionEithers)
+import Data.Either (lefts,rights,partitionEithers)
 import qualified Data.List as L (map,elem,filter,notElem,nub)
 import Data.Text (unpack,pack)
 import Data.Graph.Inductive
@@ -77,11 +77,17 @@ checkModule m = do
     let invalidSpec = lefts $ checkSpecs (decls m) mImportedDecls
     let invalidFuns = lefts $ checkFuns  (decls m) mImportedDecls
     let invalidVals = lefts $ checkVals  (decls m) mImportedDecls
-    let invalidThm  = lefts $ checkThm   (decls m) mImportedDecls
+        
+    let thmsCheck = checkThm   (decls m) mImportedDecls
+    let invalidThm  = lefts thmsCheck
     -- buscamos las derivaciones. Si hay derivaciones sin especificación, o
     -- derivaciones repetidas, entonces la lista eDerivs tendrá errores de derivación.
-    let eDerivs = createDerivations (decls m) mImportedDecls
-    let checkedDerivs = partitionEithers $ L.map checkDerivation eDerivs
+    let eDerivs = createDerivations (decls m)
+        
+        
+    let validThms = (rights thmsCheck) ++ (imThms mImportedDecls)
+    let checkedDerivs = partitionEithers $ 
+             L.map (checkDerivation (decls m) mImportedDecls validThms) eDerivs
     
     let eVerifs = createVerifications (decls m) mImportedDecls
     let checkedVerifs = partitionEithers $ L.map checkVerification eVerifs
@@ -103,6 +109,8 @@ checkModule m = do
             where
                 update :: Module -> Module
                 update m' = if m == m' then m else m'
+                
+        imThms imds = maybe [] (map snd . theorems) imds
 
 -- | Dado un nombre de módulo, comienza la carga buscado en el archivo
 -- correspondiente al módulo.

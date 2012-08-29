@@ -36,8 +36,9 @@ import System.IO.Unsafe (unsafePerformIO)
 -- | A partir de las declaraciones, crea los objetos "Derivation" juntando la informacion
 --   de cada especificación con la correspondiente derivación y def de función en caso que
 --   ocurra. Por ahora no se puede hacer más de una derivación de una misma especificación.
-createDerivations:: Declarations -> Maybe Declarations -> [EDeriv]
-createDerivations decls dswi =
+--   Además, la especificación de una derivación debe estar EN EL MISMO módulo que la derivación.
+createDerivations:: Declarations -> [EDeriv]
+createDerivations decls =
     -- Obtenemos las declaraciones parseadas
     let pDerivs = derivs decls in
         let pSpecs = L.map snd $ specs decls in
@@ -76,8 +77,9 @@ createDerivations decls dswi =
 
 -- | Funcion que dada una derivacion dice si es válida o no. Esto es solo para las derivaciones
 --   por recursión. Si luego se implementa otro tipo de derivación, entonces debería diferenciarse
-checkDerivation :: EDeriv -> EDeriv' (DeclPos,FunDecl)
-checkDerivation d = 
+checkDerivation :: Declarations -> Maybe Declarations -> [ThmDecl] -> 
+                   EDeriv -> EDeriv' (DeclPos,FunDecl)
+checkDerivation decls mImportDecls thms d = 
     case d of
         Left e -> Left e
         Right der -> -- Hacemos el chequeo de la derivación
@@ -111,7 +113,9 @@ checkDerivation d =
                 
                 return (Ind ctx rel (PE.toFocus fexpr) (PE.toFocus caseExpr) 
                                     (PE.toFocus $ PE.Var vspec) pfs') >>= 
-                \proof -> 
+                \proof' -> 
+                -- Agregamos todas las declaraciones como hipotesis
+                return (addDeclHypothesis decls thms mImportDecls proof') >>= \proof ->
                 unsafePerformIO (putStrLn ("Prueba por validar: "++show proof) >>
                                  return (return ())) >>
                 return (validateProof proof) >>= \pmProof ->
