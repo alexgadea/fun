@@ -99,6 +99,11 @@ keywordRArrow :: ParserD ()
 keywordRArrow = keyword "->"
 keywordRecursion :: ParserD ()
 keywordRecursion = keyword "recursion"
+keywordDefSymbol :: ParserD ()
+keywordDefSymbol = keyword defSymbol
+
+defSymbol :: String
+defSymbol = "="
 
 
 whites :: ParserD ()

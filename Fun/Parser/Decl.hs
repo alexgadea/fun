@@ -12,7 +12,7 @@ import qualified Equ.Parser as EquP ( parsePreExpr
                                     , initPExprState
                                     , PProofState 
                                     , PExprState
-                                    , pTheoSet, lastProofName
+                                    , pTheoSet
                                     , EitherName
                                     , ParenFlag(UseParen,UnusedParen)
                                     , PExprStateClass (..)
@@ -28,7 +28,9 @@ import Equ.Types(Type, tyVarInternal)
 import Equ.Proof.Proof ( getEnd 
                        , getRel
                        , getStart
-                       , Proof)
+                       , Proof
+                       , thExpr)
+import Equ.Expr
 import Equ.Rule (Relation)
 import Equ.Theories(createTheorem)
 
@@ -38,7 +40,7 @@ import Text.Parsec.Error(setErrorPos)
 import Text.Parsec.Token(lexeme)
 
 -- Imports Data.*
-import Data.Text(Text,pack)
+import Data.Text(Text,pack,unpack)
 import Data.Maybe (fromMaybe,fromJust)
 import qualified Data.Map as M (empty,Map,member,insert,(!),lookup) 
 
@@ -151,7 +153,7 @@ parseSF ecnstr modName = getParserState >>= \state ->
             modifyState (\st -> 
                     st {pDecls = envAddSpec (pDecls st) (declPos,cnstr fun vs e)})
         parseFunArgs :: ParserD [Variable]
-        parseFunArgs = manyTill parseVar (try $ string "=")
+        parseFunArgs = manyTill parseVar (try $ string defSymbol)
 
 -- | Parsea una especificación.
 parseSpec :: ModName -> ParserD ()
@@ -162,19 +164,19 @@ parseFun :: ModName -> ParserD ()
 parseFun = parseSF (Right Fun)
 
 -- | Parser de relaciones en ParserD, parsea hasta un terminador till.
-parseRel :: ParserD () -> ParserD Relation
-parseRel till = do
-                st <- getState
-                fmap (parseRel' (pProofs st)) (manyTill anyChar till) >>= pass
-    where
-        pass :: Either ParseError Relation -> ParserD Relation
-        pass er = case er of
-                    Right r -> return r
-                    Left per -> getPosition >>= \p -> 
-                                fail $ show $ flip setErrorPos per $
-                                setSourceLine (errorPos per) (sourceLine p-1)
-        parseRel' :: EquP.PProofState -> String -> Either ParseError Relation
-        parseRel' pps = runParser EquP.rel pps ""
+-- parseRel :: ParserD () -> ParserD Relation
+-- parseRel till = do
+--                 st <- getState
+--                 fmap (parseRel' (pProofs st)) (manyTill anyChar till) >>= pass
+--     where
+--         pass :: Either ParseError Relation -> ParserD Relation
+--         pass er = case er of
+--                     Right r -> return r
+--                     Left per -> getPosition >>= \p -> 
+--                                 fail $ show $ flip setErrorPos per $
+--                                 setSourceLine (errorPos per) (sourceLine p-1)
+--         parseRel' :: EquP.PProofState -> String -> Either ParseError Relation
+--         parseRel' pps = runParser EquP.rel pps ""
 
 parseProof :: ParserD Proof
 parseProof = EquP.proof Nothing True
@@ -185,21 +187,24 @@ parseThm :: Text -> ParserD ()
 parseThm modName = do
     state <- getParserState
     let beginPos = statePos state
+    name <- parseName
+    many (whites <|> tryNewline)
+    keywordDefSymbol
+    --many (whites <|> tryNewline)
+    e <- parseExpr
     s <- getInput
     p <- parseProof
-    state <- getState
-    let mname = EquP.lastProofName $ pProofs state
-    maybe (fail "Prueba sin nombre") (\name -> continue name p beginPos) mname
     
-    
-    where continue name p beginPos = do
-            state <- getParserState
-            let endPos = statePos state
-            let declPos = DeclPos beginPos endPos modName
-            let declThm = Thm $ createTheorem name p
-            modifyState (\st -> st { pDecls = envAddTheorem (pDecls st) (declPos,declThm)
-                                , pProofs = addTheorem (pProofs st) name p
-                                })
+    state <- getParserState
+    let endPos = statePos state
+    let declPos = DeclPos beginPos endPos modName
+    let t = createTheorem name p
+    let declThm = Thm $ t
+    let proofExpr = thExpr t
+    -- Este chequeo deberia ir en el chequeo de módulos y no acá.
+    if proofExpr /= Expr e
+       then fail "La expresión de la declaración del teorema no coincide con la prueba"
+       else modifyState (\st -> st { pDecls = envAddTheorem (pDecls st) (declPos,declThm) })
 
 -- | Agrega un teorema parseado al estado de parseo de teoremas.
 addTheorem :: EquP.PProofState -> Text -> Proof -> EquP.PProofState
@@ -224,7 +229,7 @@ parseVal modName = parseVar >>= \v -> getParserState >>= \state ->
     where 
         parseVarWithoutType :: Variable -> SourcePos -> Text -> ParserD ()
         parseVarWithoutType v beginPos modName = try $
-                keyword "=" >> parseExpr
+                keywordDefSymbol >> parseExpr
                 >>= \e ->
                 many (whites <|> tryNewline) >> 
                 getParserState >>= \state ->
@@ -246,7 +251,11 @@ parseProp modName = do
         state <- getParserState
         let beginPos = statePos state
         name <- parseName
+        many (whites <|> tryNewline)
+        keywordDefSymbol
+        --many (whites <|> tryNewline)
         e <- parseExpr
+        many (whites <|> tryNewline)
         keywordEnd
         state <- getParserState
         let endPos = statePos state
@@ -291,7 +300,7 @@ parseDecl modName =
          <|> parseLet "fun"        (parseFun modName)
          <|> parseLet "val"        (parseVal modName)
          <|> parseLet "derivation" (parseDer modName)
-         <|> parseThm modName
+         <|> parseLet "thm"        (parseThm modName)
 
 -- | Parsea una declaración en desde un string.
 parseFromStringDecl :: String -> Either ParseError ()
