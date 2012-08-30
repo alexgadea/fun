@@ -118,8 +118,6 @@ getOrder cfg = cfg ^. (evEnv . order)
 getExpr :: Config -> Maybe PreExpr
 getExpr cfg = cfg ^. expr
 
-getQry :: (Config -> a) -> (a -> IO b) -> Config -> IO Config
-getQry q p cfg = (p . q) cfg >> return cfg
 
 getInitExpr :: Run r (Maybe PreExpr)
 getInitExpr = getExpr . fst <$> lift get

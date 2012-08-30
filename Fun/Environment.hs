@@ -1,6 +1,7 @@
 -- | Environment es el conjunto de módulos que se tienen cargados en un momento dado
 --   en Fun. Cada vez que se hace un import desde un módulo, debe referirse a un
 --   módulo que se encuentre en el environment.
+{-# Language DoAndIfThenElse #-}
 module Fun.Environment where
 
 import Fun.Module
@@ -13,6 +14,7 @@ import Fun.Decl(FunDecl)
 import Fun.Declarations
 import Fun.Verification
 import Fun.Derivation
+import Fun.TypeChecker
 
 import Data.Either (lefts,partitionEithers)
 import qualified Data.List as L (map,elem,filter,notElem,nub)
@@ -20,9 +22,10 @@ import Data.Text (unpack,pack)
 import Data.Graph.Inductive
 import Data.Graph.Inductive.Query.DFS (reachable)
 
+import Data.Maybe
 
 import Control.Applicative ((<$>))
-import Control.Arrow ((***))
+import Control.Arrow ((***),second)
 import Control.Monad (foldM)
 import Data.Functor.Identity
 import Control.Monad.IO.Class (liftIO)
@@ -89,10 +92,20 @@ checkModule m = do
     case (invalidSpec, invalidFuns, invalidVals, invalidThm, checkedVerifs,checkedDerivs) of
         ([],[],[],[],([],cverifs),([],cderivs)) ->
             -- Agregamos al modulo las definiciones de funciones derivadas
-            let m' = m { decls = (decls m) {functions = functions (decls m) ++ cderivs}
+            -- let m' = m { decls = (decls m) {functions = functions (decls m) ++ cderivs}
+            --            , verifications = cverifs
+            --            }
+            let funcs = functions (decls m) ++ cderivs -- functions moduleDecls ++ cderivs in
+                m' = m { decls = (decls m) {functions = funcs }
                        , verifications = cverifs
                        }
-            in updateModuleEnv m' >> return Nothing
+            in
+            case typeCheckDeclarations (map snd funcs) of
+              Left _ -> return . Just $ createError (modName m) ([],[],[],[],[],[])
+              Right funcs' -> let m' = m {decls = (decls m) { functions = zipWith (\(a,_) f -> (a,f)) funcs funcs' }}
+                             in updateModuleEnv m' >> return Nothing
+
+--            in updateModuleEnv m' >> return Nothing
         (e1,e2,e3,e4,(e5,_),(e6,_)) -> 
             return . Just $ createError (modName m) (e1,e2,e3,e4,e5,e6)
     where
@@ -103,6 +116,14 @@ checkModule m = do
             where
                 update :: Module -> Module
                 update m' = if m == m' then m else m'
+
+--             let funcs = functions moduleDecls ++ cderivs
+-- --                m' = m {decls = (decls m) { functions = funcs }}
+
+--             case typeCheckDeclarations (map snd funcs) of
+--               Left _ -> return . Just $ createError (modName m) ([],[],[],[],[],[])
+--               Right funcs' -> let m' = m {decls = (decls m) { functions = zipWith (\(a,_) f -> (a,f)) funcs funcs' }}
+--                              in modify (second $ addModuleEnv m') >> return Nothing
 
 -- | Dado un nombre de módulo, comienza la carga buscado en el archivo
 -- correspondiente al módulo.
@@ -115,9 +136,9 @@ loadMainModule modN = do
                 (mErr,st) <- runStateT (loadAndCheck m) initCM
                 maybe (return $ Right $ modulesEnv st) (return . Left) mErr
               ) mParsedM
-    where
-        loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
-        loadAndCheck m = loadEnv m >>= maybe checkEnvModules (return . Just)
+    where loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
+          loadAndCheck m = loadEnv m >>= maybe checkEnvModules (return . Just)
+
 
 -- | Carga los módulos en al environment, esto implica parsear el módulo inicial
 -- y cargarlo, así como los imports en cadena.
@@ -157,18 +178,15 @@ parseFromFileModule fp = readModule (unpack fp) >>= \eitherS ->
                         either (return . Left) (return . load) eitherS
     where
         load :: String -> Either ModuleError Module
-        load s = case (parseFromStringModule s) of
-                    Left err -> Left $ ModuleParseError err
-                    Right m -> Right m
-        readModule :: FilePath -> IO (Either ModuleError String)
-        readModule fp =
-                    C.catch (readFile fp)
-                             (\e -> do 
-                                    let err = show (e :: C.IOException) 
-                                    return "ModuleError") >>= \eErr ->
-                    case eErr of
-                        "ModuleError" -> return $ Left $ ModuleErrorFileDoesntExist $ pack fp
-                        _ -> return $ Right eErr
+        load = either (Left . ModuleParseError) Right . parseFromStringModule 
+
+readModule :: FilePath -> IO (Either ModuleError String)
+readModule fp = C.catch (readFile fp)
+                (\e -> do let err = show (e :: C.IOException)  in
+                             return "ModuleError") >>= \eErr ->
+                case eErr of
+                  "ModuleError" -> return $ Left $ ModuleErrorFileDoesntExist $ pack fp
+                  _ -> return $ Right eErr
 
 -- | Parsea un módulo desde una string.
 loadMainModuleFromString :: String -> IO (Either ModuleError (Environment,ModName))

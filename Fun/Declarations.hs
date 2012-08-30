@@ -25,6 +25,7 @@ import Data.Maybe (fromJust,fromMaybe,mapMaybe)
 import Text.Parsec.Pos (newPos)
 
 import Control.Monad
+import Control.Arrow(second)
 
 import System.IO.Unsafe
 
@@ -260,3 +261,6 @@ initDeclarations = Declarations {
     where
         initDeclPos = DeclPos initPosThms initPosThms (pack "")
         initPosThms = newPos "TeoremasIniciales" 0 0
+
+modifyFunDecl :: (FunDecl -> FunDecl) -> Declarations -> Declarations
+modifyFunDecl f d = d { functions = map (second f) (functions d) }
