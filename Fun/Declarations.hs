@@ -15,7 +15,7 @@ import Fun.Decl
 import Fun.Decl.Error
 import Equ.IndType
 
-import qualified Data.List as L (map,elem,delete,filter,concatMap, foldl,length)
+import qualified Data.List as L (map,elem,delete,filter,concatMap, foldl,length,concat)
 import qualified Data.Set as S (toList)
 import qualified Data.Map as M
 import Data.Text hiding (map,concatMap,unlines,reverse)
@@ -27,7 +27,7 @@ import Text.Parsec.Pos (newPos)
 import Control.Monad
 import Control.Arrow(second)
 
-import System.IO.Unsafe
+import System.IO.Unsafe (unsafePerformIO)
 
 data CDoubleType = CDSpec | CDFun | CDThm | CDProp | CDVal
     deriving Eq
@@ -136,48 +136,55 @@ checkThm ds imds =
         L.foldl (\prevThms (dPos,thm@(Thm p)) -> 
             do
             let (errThms,rThms) = partitionEithers prevThms
-            let proofWithThms   = addHyps (thProof p) (rThms ++ imThms)
-            let proofWithDecls  = addDeclsHyps proofWithThms
+            let proofWithDecls = addDeclHypothesis ds (rThms ++ imThms) imds (thProof p)
             case (checkDoubleDef CDThm (dPos,thm) dswi, validateProof proofWithDecls) of
                 ([],Right _) -> Right thm : prevThms
                 (dErrs,eiErrs) -> (Left $ ErrInDecl dPos (dErrs++makeError eiErrs) thm) : prevThms
                 ) [] thmDefs
     where
-        hypsSpecs :: [Hypothesis]
-        hypsSpecs = mapMaybe (createHypDecl . snd) $ specs dswi
-        hypsFuns :: [Hypothesis]
-        hypsFuns = mapMaybe (createHypDecl . snd) $ functions dswi
-        hypsVals :: [Hypothesis]
-        hypsVals = mapMaybe (createHypDecl . snd) $ vals dswi
-        hypsProps :: [Hypothesis]
-        hypsProps = mapMaybe (createHypDecl . snd) $ props dswi
-        hypsDecls :: [Hypothesis]
-        hypsDecls = hypsFuns ++ hypsSpecs ++ hypsVals ++ hypsProps
-        addDeclsHyps :: Proof -> Proof
-        addDeclsHyps p = L.foldl (\p hyp -> fromJust $ addDeclsHyp p hyp) p hypsDecls
-        addDeclsHyp :: Proof -> Hypothesis -> Maybe Proof
-        addDeclsHyp p hyp = do
-                    ctx <- getCtx p
-                    let updateCtx = addHypothesis' hyp ctx
-                    setCtx updateCtx p
         imThms :: [ThmDecl]
         imThms = maybe [] (map snd . theorems) imds
         -- Grupo de declaraciones de un módulos mas las de sus imports
         dswi :: Declarations 
         dswi = maybe ds (concatDeclarations ds) imds
-        addHyps :: Proof -> [ThmDecl] -> Proof
-        addHyps = L.foldl (\ p thm -> fromJust $ addHyp p thm)
-        addHyp :: Proof -> ThmDecl -> Maybe Proof
-        addHyp p (Thm t) = do
-                    ctx <- getCtx p
-                    let hyp = createHypothesis (thName t) (thExpr t) (GenConditions [])
-                    let updateCtx = addHypothesis' hyp ctx
-                    setCtx updateCtx p
         thmDefs :: [(DeclPos,ThmDecl)]
         thmDefs = reverse $ theorems ds
         makeError :: Either ProofError Proof -> [DeclError]
         makeError = either (\p -> [InvalidProofForThm p]) (const [])
 
+hypListFromDeclarations :: Declarations -> [ThmDecl] -> [Hypothesis]
+hypListFromDeclarations decls thms = 
+    let (hSpecs,hFuns,hProps,hVals) = 
+          (hyps specs decls,hyps functions decls,hyps vals decls, hyps props decls) in
+          
+        L.concat [hSpecs,hFuns,hProps,hVals,hThms]
+    
+    where hyps :: Decl d => (Declarations -> [(a,d)]) -> Declarations -> [Hypothesis]
+          hyps f ds = mapMaybe (createHypDecl . snd) $ f ds
+          hThms :: [Hypothesis]
+          hThms = mapMaybe createHypDecl thms
+        
+-- Esta funcion agrega a una prueba las hipótesis correspondientes a todas las declaraciones
+-- definidas y los teoremas validos.
+addDeclHypothesis :: Declarations -> [ThmDecl] -> Maybe Declarations -> Proof -> Proof
+addDeclHypothesis decls validThms mImportDecls pr =
+    addDeclsHyps pr
+    
+    where imThms :: [ThmDecl]
+          imThms = maybe [] (map snd . theorems) mImportDecls
+          addDeclsHyps :: Proof -> Proof
+          addDeclsHyps p = 
+            L.foldl (\p hyp -> fromJust $ addDeclsHyp p hyp) 
+                    p (hypListFromDeclarations dswi validThms)
+          addDeclsHyp :: Proof -> Hypothesis -> Maybe Proof
+          addDeclsHyp p hyp = do
+                    ctx <- getCtx p
+                    let updateCtx = addHypothesis' hyp ctx
+                    setCtx updateCtx p
+          dswi :: Declarations 
+          dswi = maybe decls (concatDeclarations decls) mImportDecls
+
+        
 checkVals :: Declarations -> Maybe Declarations ->
              [Either (ErrInDecl ValDecl) ValDecl]
 checkVals ds imds =  

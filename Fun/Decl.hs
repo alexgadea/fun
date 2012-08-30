@@ -89,7 +89,7 @@ instance Decl PropDecl where
     getVarsDecl _ = Nothing
     getFocusProof _ = Nothing
     createHypDecl (Prop t e) =
-        Just $ createHypothesis (pack $ "prop "++ show t)
+        Just $ createHypothesis (pack $ "prop "++ unpack t)
                                 (Expr e) (GenConditions [])
     
 instance Decl ThmDecl where
