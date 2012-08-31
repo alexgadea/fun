@@ -20,9 +20,7 @@ import Data.Text (unpack,pack)
 import Data.Graph.Inductive
 import Data.Graph.Inductive.Query.DFS (reachable)
 
-
 import Control.Applicative ((<$>))
-import Control.Arrow ((***))
 import Control.Monad (foldM)
 import Data.Functor.Identity
 import Control.Monad.IO.Class (liftIO)
@@ -166,7 +164,7 @@ parseFromFileModule fp = readModule (unpack fp) >>= \eitherS ->
     where
         load :: String -> Either ModuleError Module
         load s = case (parseFromStringModule s) of
-                    Left err -> Left $ ModuleParseError err
+                    Left err -> Left $ ModuleParseError fp err
                     Right m -> Right m
         readModule :: FilePath -> IO (Either ModuleError String)
         readModule fp =
@@ -178,11 +176,24 @@ parseFromFileModule fp = readModule (unpack fp) >>= \eitherS ->
                         "ModuleError" -> return $ Left $ ModuleErrorFileDoesntExist $ pack fp
                         _ -> return $ Right eErr
 
+loadMainModuleFromFile :: TextFilePath -> IO (Either ModuleError (Environment,ModName))
+loadMainModuleFromFile fp = do
+       mParsedM <- parseFromFileModule fp
+       either (return . Left) 
+              (\m -> do
+                let initCM = initStateCM (insModuleImports m emptyImMG) [m]
+                (mErr,st) <- runStateT (loadAndCheck m) initCM
+                maybe (return $ Right (modulesEnv st,modName m)) (return . Left) mErr
+              ) mParsedM
+    where
+        loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
+        loadAndCheck m = loadEnv m >>= maybe checkEnvModules (return . Just)
+
 -- | Parsea un módulo desde una string.
 loadMainModuleFromString :: String -> IO (Either ModuleError (Environment,ModName))
 loadMainModuleFromString s = do
        let mParsedM = parseFromStringModule s
-       either (return . Left . ModuleParseError) 
+       either (return . Left . ModuleParseError (pack "")) 
               (\m -> do
                 let initCM = initStateCM (insModuleImports m emptyImMG) [m]
                 (mErr,st) <- runStateT (loadAndCheck m) initCM

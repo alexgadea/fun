@@ -27,7 +27,9 @@ instance Eq PropDecl where
     (Prop t _) == (Prop t' _) = t == t'
 
 data ThmDecl = Thm Theorem
-    deriving Show
+
+instance Show ThmDecl where
+    show (Thm t) = show $ thExpr t
 
 instance Eq ThmDecl where
     thm == thm' = getNameDecl thm == getNameDecl thm'
@@ -52,7 +54,11 @@ instance Eq OpDecl where
     (OpDecl op _ _) == (OpDecl op' _ _) = op == op'
 
 data DerivDecl = Deriv Variable Variable [(PE.Focus,Proof)]
-    deriving Show
+
+instance Show DerivDecl where
+    show (Deriv v v' fps) = "Deriv "
+                          ++ show v ++ " " ++ show v' ++ " " 
+                          ++ show (map fst fps)
 
 instance Eq DerivDecl where
     (Deriv v _ _) == (Deriv v' _ _) = v == v'

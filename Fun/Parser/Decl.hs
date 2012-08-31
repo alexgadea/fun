@@ -190,11 +190,8 @@ parseThm modName = do
     name <- parseName
     many (whites <|> tryNewline)
     keywordDefSymbol
-    --many (whites <|> tryNewline)
     e <- parseExpr
-    s <- getInput
     p <- parseProof
-    
     state <- getParserState
     let endPos = statePos state
     let declPos = DeclPos beginPos endPos modName
