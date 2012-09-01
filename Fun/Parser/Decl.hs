@@ -88,7 +88,7 @@ parseLet s parse = try $ do many newline
 
 -- | Parsea nombres que comienzan con minuscula.
 parseName :: ParserD Text
-parseName = lower >>= \lc -> (pack . (lc :)) <$> many1 letter
+parseName = lexeme lexer ((:) <$> lower <*> many alphaNum) >>= return . pack
 
 parseVar :: ParserD Variable
 parseVar = EquP.parseVariable
