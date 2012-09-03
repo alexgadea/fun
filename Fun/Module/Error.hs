@@ -9,7 +9,7 @@ import Fun.Decl (SpecDecl, FunDecl, ValDecl, ThmDecl, DerivDecl)
 
 import Data.Text (Text,unpack)
 
-data ModuleError = ModuleParseError ParseError
+data ModuleError = ModuleParseError TextFilePath ParseError
                  | ModuleErrorFileDoesntExist Text
                  | ModuleCycleImport [Text]
                  | ModuleError 
@@ -23,7 +23,8 @@ data ModuleError = ModuleParseError ParseError
                     }
 
 instance Show ModuleError where
-    show (ModuleParseError perr) = show perr
+    show (ModuleParseError fp perr) = "Error de parseo en " ++ show (unpack fp) 
+                                    ++ ":\n" ++ show perr
     show (ModuleErrorFileDoesntExist t) = 
         "No existe el archivo correspondiente a este nombre de módulo: " ++ unpack t
     show (ModuleCycleImport (mn:mns)) = 
@@ -43,7 +44,7 @@ instance Show ModuleError where
                      ]
 
 instance Eq ModuleError where
-    ModuleParseError p == ModuleParseError p' = error "Impossible"
+    ModuleParseError _ _ == ModuleParseError _ _ = error "Impossible"
     m == m' = mName m == mName m' &&
               mErrSpecs m == mErrSpecs m' &&
               mErrFuns m == mErrFuns m' &&

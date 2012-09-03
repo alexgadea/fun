@@ -88,7 +88,7 @@ parseLet s parse = try $ do many newline
 
 -- | Parsea nombres que comienzan con minuscula.
 parseName :: ParserD Text
-parseName = lower >>= \lc -> (pack . (lc :)) <$> many1 letter
+parseName = lexeme lexer ((:) <$> lower <*> many alphaNum) >>= return . pack
 
 parseVar :: ParserD Variable
 parseVar = EquP.parseVariable
@@ -190,11 +190,8 @@ parseThm modName = do
     name <- parseName
     many (whites <|> tryNewline)
     keywordDefSymbol
-    --many (whites <|> tryNewline)
     e <- parseExpr
-    s <- getInput
     p <- parseProof
-    
     state <- getParserState
     let endPos = statePos state
     let declPos = DeclPos beginPos endPos modName

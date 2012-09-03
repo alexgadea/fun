@@ -22,10 +22,14 @@ import Data.Text (unpack,pack)
 import Data.Graph.Inductive
 import Data.Graph.Inductive.Query.DFS (reachable)
 
+<<<<<<< HEAD
 import Data.Maybe
 
 import Control.Applicative ((<$>))
 import Control.Arrow ((***),second)
+=======
+import Control.Applicative ((<$>))
+>>>>>>> c4fe034ef22ab702fede3af1efc90aef6b93e59c
 import Control.Monad (foldM)
 import Data.Functor.Identity
 import Control.Monad.IO.Class (liftIO)
@@ -186,6 +190,7 @@ parseFromFileModule fp = readModule (unpack fp) >>= \eitherS ->
                         either (return . Left) (return . load) eitherS
     where
         load :: String -> Either ModuleError Module
+<<<<<<< HEAD
         load = either (Left . ModuleParseError) Right . parseFromStringModule 
 
 readModule :: FilePath -> IO (Either ModuleError String)
@@ -195,12 +200,39 @@ readModule fp = C.catch (readFile fp)
                 case eErr of
                   "ModuleError" -> return $ Left $ ModuleErrorFileDoesntExist $ pack fp
                   _ -> return $ Right eErr
+=======
+        load s = case (parseFromStringModule s) of
+                    Left err -> Left $ ModuleParseError fp err
+                    Right m -> Right m
+        readModule :: FilePath -> IO (Either ModuleError String)
+        readModule fp =
+                    C.catch (readFile fp)
+                             (\e -> do 
+                                    let err = show (e :: C.IOException) 
+                                    return "ModuleError") >>= \eErr ->
+                    case eErr of
+                        "ModuleError" -> return $ Left $ ModuleErrorFileDoesntExist $ pack fp
+                        _ -> return $ Right eErr
+>>>>>>> c4fe034ef22ab702fede3af1efc90aef6b93e59c
+
+loadMainModuleFromFile :: TextFilePath -> IO (Either ModuleError (Environment,ModName))
+loadMainModuleFromFile fp = do
+       mParsedM <- parseFromFileModule fp
+       either (return . Left) 
+              (\m -> do
+                let initCM = initStateCM (insModuleImports m emptyImMG) [m]
+                (mErr,st) <- runStateT (loadAndCheck m) initCM
+                maybe (return $ Right (modulesEnv st,modName m)) (return . Left) mErr
+              ) mParsedM
+    where
+        loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
+        loadAndCheck m = loadEnv m >>= maybe checkEnvModules (return . Just)
 
 -- | Parsea un módulo desde una string.
 loadMainModuleFromString :: String -> IO (Either ModuleError (Environment,ModName))
 loadMainModuleFromString s = do
        let mParsedM = parseFromStringModule s
-       either (return . Left . ModuleParseError) 
+       either (return . Left . ModuleParseError (pack "")) 
               (\m -> do
                 let initCM = initStateCM (insModuleImports m emptyImMG) [m]
                 (mErr,st) <- runStateT (loadAndCheck m) initCM
