@@ -50,9 +50,9 @@ createVerifications decls imds = do
 checkVerification :: Verification -> 
                      Either ([VerificationError], Verification) Verification 
 checkVerification d = 
-            case (checkStartExpr, checkEndExpr, checkHypExpr) of
-                ([],[],[]) -> return d
-                (sErr,eErr,hypErr) -> Left (sErr ++ eErr ++ hypErr, d)
+            case (checkStartExpr, checkEndExpr) of
+                ([],[]) -> return d
+                (sErr,eErr) -> Left (sErr ++ eErr, d)
     where
         prf :: Proof
         prf = proof d
@@ -72,16 +72,4 @@ checkVerification d =
                 if prg == PE.toExpr ef
                    then []
                    else [InvalidEndOfProof prg (PE.toExpr ef)]
-        checkHypExpr :: [VerificationError]
-        checkHypExpr = do
-                let Right ctx = getCtx prf
-                let Right rel = getRel prf
-                let Spec f vs e = spec d
-                let fWithArgs = foldl PE.preExprApp (PE.Var f) (map PE.Var vs)
-                let hyp = makeHypExpr rel fWithArgs e
-                if exprIsHypothesis hyp ctx
-                   then []
-                   else [MissingSpecHypInProof hyp]
-        makeHypExpr :: Relation -> PE.PreExpr -> PE.PreExpr -> Expr
-        makeHypExpr r e e' = Expr $ PE.BinOp (relToOp r) e e'
         

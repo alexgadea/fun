@@ -70,36 +70,46 @@ checkModule m = do
     let mImportedDecls = if null mImports
                             then Nothing
                             else Just $ foldr1 concatDeclarations 
-                                      $ map decls mImports
+                                      $ map validDecls mImports
     
-    let invalidSpec = lefts $ checkSpecs (decls m) mImportedDecls
-    let invalidFuns = lefts $ checkFuns  (decls m) mImportedDecls
-    let invalidVals = lefts $ checkVals  (decls m) mImportedDecls
+    let invalidSpec = lefts $ checkSpecs (validDecls m) mImportedDecls
+    let invalidFuns = lefts $ checkFuns  (validDecls m) mImportedDecls
+    let invalidVals = lefts $ checkVals  (validDecls m) mImportedDecls
         
-    let thmsCheck = checkThm   (decls m) mImportedDecls
+    let thmsCheck = checkThm   (validDecls m) mImportedDecls
     let invalidThm  = lefts thmsCheck
     -- buscamos las derivaciones. Si hay derivaciones sin especificación, o
     -- derivaciones repetidas, entonces la lista eDerivs tendrá errores de derivación.
-    let eDerivs = createDerivations (decls m)
+    let eDerivs = createDerivations (validDecls m)
         
-        
+    
     let validThms = (rights thmsCheck) ++ (imThms mImportedDecls)
     let checkedDerivs = partitionEithers $ 
-             L.map (checkDerivation (decls m) mImportedDecls validThms) eDerivs
+             L.map (checkDerivation (validDecls m) mImportedDecls validThms) eDerivs
     
-    let eVerifs = createVerifications (decls m) mImportedDecls
+    let eVerifs = createVerifications (validDecls m) mImportedDecls
     let checkedVerifs = partitionEithers $ L.map checkVerification eVerifs
-
+    
+    let inDeclarations = InvalidDeclarations [] [] 
+                                             invalidThm 
+                                             [] [] 
+                                             (fst checkedDerivs)
+    
     case (invalidSpec, invalidFuns, invalidVals, invalidThm, checkedVerifs,checkedDerivs) of
-        ([],[],[],[],([],cverifs),([],cderivs)) ->
+        ([],[],[],_,(inverifs,cverifs),(_,cderivs)) ->
             -- Agregamos al modulo las definiciones de funciones derivadas
-            let m' = m { decls = (decls m) {functions = functions (decls m) ++ cderivs}
+            let m' = m { validDecls = updateValidDecls (validDecls m) inDeclarations cderivs
                        , verifications = cverifs
+                       , invalidDecls = InvalidDeclsAndVerifs inDeclarations inverifs
                        }
             in updateModuleEnv m' >> return Nothing
         (e1,e2,e3,e4,(e5,_),(e6,_)) -> 
             return . Just $ createError (modName m) (e1,e2,e3,e4,e5,e6)
     where
+        updateValidDecls vd ind nf = filterVD {functions = filterVDFuncs ++ nf}
+            where 
+                filterVDFuncs = functions $ filterVD 
+                filterVD = filterValidDecls vd ind
         updateModuleEnv :: Module -> CheckModule (Maybe ModuleError)
         updateModuleEnv m = do
                         modify (\s -> s { modulesEnv = map update $ modulesEnv s })
@@ -155,7 +165,7 @@ loadEnv m = foldM (\ may (Import mn) ->
 
 -- Queries for environments
 getFuncs :: Environment -> [FunDecl]
-getFuncs = concatMap (map snd . functions . decls)
+getFuncs = concatMap (map snd . functions . validDecls)
 
 -- | Parsea una módulo en base a una dirección de archivo.
 parseFromFileModule :: TextFilePath -> IO (Either ModuleError Module)
