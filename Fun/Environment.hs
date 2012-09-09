@@ -22,14 +22,10 @@ import Data.Text (unpack,pack)
 import Data.Graph.Inductive
 import Data.Graph.Inductive.Query.DFS (reachable)
 
-<<<<<<< HEAD
 import Data.Maybe
 
 import Control.Applicative ((<$>))
 import Control.Arrow ((***),second)
-=======
-import Control.Applicative ((<$>))
->>>>>>> c4fe034ef22ab702fede3af1efc90aef6b93e59c
 import Control.Monad (foldM)
 import Data.Functor.Identity
 import Control.Monad.IO.Class (liftIO)
@@ -79,28 +75,33 @@ checkModule m = do
     let mImportedDecls = if null mImports
                             then Nothing
                             else Just $ foldr1 concatDeclarations 
-                                      $ map decls mImports
+                                      $ map validDecls mImports
     
-    let invalidSpec = lefts $ checkSpecs (decls m) mImportedDecls
-    let invalidFuns = lefts $ checkFuns  (decls m) mImportedDecls
-    let invalidVals = lefts $ checkVals  (decls m) mImportedDecls
+    let invalidSpec = lefts $ checkSpecs (validDecls m) mImportedDecls
+    let invalidFuns = lefts $ checkFuns  (validDecls m) mImportedDecls
+    let invalidVals = lefts $ checkVals  (validDecls m) mImportedDecls
         
-    let thmsCheck = checkThm   (decls m) mImportedDecls
+    let thmsCheck = checkThm   (validDecls m) mImportedDecls
     let invalidThm  = lefts thmsCheck
     -- buscamos las derivaciones. Si hay derivaciones sin especificación, o
     -- derivaciones repetidas, entonces la lista eDerivs tendrá errores de derivación.
-    let eDerivs = createDerivations (decls m)
+    let eDerivs = createDerivations (validDecls m)
         
-        
+    
     let validThms = (rights thmsCheck) ++ (imThms mImportedDecls)
     let checkedDerivs = partitionEithers $ 
-             L.map (checkDerivation (decls m) mImportedDecls validThms) eDerivs
+             L.map (checkDerivation (validDecls m) mImportedDecls validThms) eDerivs
     
-    let eVerifs = createVerifications (decls m) mImportedDecls
+    let eVerifs = createVerifications (validDecls m) mImportedDecls
     let checkedVerifs = partitionEithers $ L.map checkVerification eVerifs
-
+    
+    let inDeclarations = InvalidDeclarations [] [] 
+                                             invalidThm 
+                                             [] [] 
+                                             (fst checkedDerivs)
+    
     case (invalidSpec, invalidFuns, invalidVals, invalidThm, checkedVerifs,checkedDerivs) of
-        ([],[],[],[],([],cverifs),([],cderivs)) ->
+        ([],[],[],_,(inverifs,cverifs),(_,cderivs)) ->
             -- Agregamos al modulo las definiciones de funciones derivadas
             -- let m' = m { decls = (decls m) {functions = functions (decls m) ++ cderivs}
             --            , verifications = cverifs
@@ -108,17 +109,23 @@ checkModule m = do
             let funcs = functions (decls m) ++ cderivs -- functions moduleDecls ++ cderivs in
                 m' = m { decls = (decls m) {functions = funcs }
                        , verifications = cverifs
+                       , invalidDecls = InvalidDeclsAndVerifs inDeclarations inverifs
                        }
             in
             case typeCheckDeclarations (map snd funcs) of
               Left _ -> return . Just $ createError (modName m) ([],[],[],[],[],[])
-              Right funcs' -> let m' = m {decls = (decls m) { functions = zipWith (\(a,_) f -> (a,f)) funcs funcs' }}
-                             in updateModuleEnv m' >> return Nothing
+              Right funcs' -> let funs = zipWith (\(a,_) f -> (a,f)) funcs funcs'
+                             in let m' = m {validDecls = (validDecls m) { functions = funs }}
+                                in updateModuleEnv m' >> return Nothing
 
 --            in updateModuleEnv m' >> return Nothing
         (e1,e2,e3,e4,(e5,_),(e6,_)) -> 
             return . Just $ createError (modName m) (e1,e2,e3,e4,e5,e6)
     where
+        updateValidDecls vd ind nf = filterVD {functions = filterVDFuncs ++ nf}
+            where 
+                filterVDFuncs = functions $ filterVD 
+                filterVD = filterValidDecls vd ind
         updateModuleEnv :: Module -> CheckModule (Maybe ModuleError)
         updateModuleEnv m = do
                         modify (\s -> s { modulesEnv = map update $ modulesEnv s })
@@ -182,7 +189,7 @@ loadEnv m = foldM (\ may (Import mn) ->
 
 -- Queries for environments
 getFuncs :: Environment -> [FunDecl]
-getFuncs = concatMap (map snd . functions . decls)
+getFuncs = concatMap (map snd . functions . validDecls)
 
 -- | Parsea una módulo en base a una dirección de archivo.
 parseFromFileModule :: TextFilePath -> IO (Either ModuleError Module)
@@ -190,8 +197,7 @@ parseFromFileModule fp = readModule (unpack fp) >>= \eitherS ->
                         either (return . Left) (return . load) eitherS
     where
         load :: String -> Either ModuleError Module
-<<<<<<< HEAD
-        load = either (Left . ModuleParseError) Right . parseFromStringModule 
+        load = either (Left . ModuleParseError (pack "")) Right . parseFromStringModule 
 
 readModule :: FilePath -> IO (Either ModuleError String)
 readModule fp = C.catch (readFile fp)
@@ -200,20 +206,6 @@ readModule fp = C.catch (readFile fp)
                 case eErr of
                   "ModuleError" -> return $ Left $ ModuleErrorFileDoesntExist $ pack fp
                   _ -> return $ Right eErr
-=======
-        load s = case (parseFromStringModule s) of
-                    Left err -> Left $ ModuleParseError fp err
-                    Right m -> Right m
-        readModule :: FilePath -> IO (Either ModuleError String)
-        readModule fp =
-                    C.catch (readFile fp)
-                             (\e -> do 
-                                    let err = show (e :: C.IOException) 
-                                    return "ModuleError") >>= \eErr ->
-                    case eErr of
-                        "ModuleError" -> return $ Left $ ModuleErrorFileDoesntExist $ pack fp
-                        _ -> return $ Right eErr
->>>>>>> c4fe034ef22ab702fede3af1efc90aef6b93e59c
 
 loadMainModuleFromFile :: TextFilePath -> IO (Either ModuleError (Environment,ModName))
 loadMainModuleFromFile fp = do

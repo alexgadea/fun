@@ -10,19 +10,21 @@ import Text.Parsec
 import Fun.Parser.Internal
 import Fun.Parser.Import
 import Fun.Parser.Decl
-import Fun.Verification
+import Fun.Declarations
 import Fun.Module
 
 -- | Parser de modulos de fun.
 parseModule :: ParserD Module
 parseModule = do
-            keywordModule
-            mName <- parseModuleName
-            imports <- manyTill parseImport (parseDecl mName)
-            manyTill (parseDecl mName <|> parseComments) eof
-            st <- getState
-            return $ Module mName imports (pDecls st) [] []
+        keywordModule
+        mName <- parseModuleName
+        imports <- manyTill parseImport (parseDecl mName)
+        manyTill (parseDecl mName <|> parseComments) eof
+        st <- getState
+        return $ Module mName imports (pDecls st) emptyInDeclsVerifs [] []
     where
+        emptyInDeclsVerifs :: InvalidDeclsAndVerifs
+        emptyInDeclsVerifs = InvalidDeclsAndVerifs emptyInDeclarations []
         parseComments :: ParserD ()
         parseComments = many1 ( lineComment 
                              <|> blockComment 

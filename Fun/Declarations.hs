@@ -13,9 +13,13 @@ import Fun.Theories
 import Fun.Theory
 import Fun.Decl
 import Fun.Decl.Error
+import Fun.Derivation.Error
+import Fun.Verification.Error
 import Equ.IndType
 
-import qualified Data.List as L (map,elem,delete,filter,concatMap, foldl,length,concat)
+import qualified Data.List as L ( map,elem,delete,filter
+                                , concatMap, foldl,length
+                                , concat, notElem)
 import qualified Data.Set as S (toList)
 import qualified Data.Map as M
 import Data.Text hiding (map,concatMap,unlines,reverse)
@@ -32,8 +36,17 @@ import System.IO.Unsafe (unsafePerformIO)
 data CDoubleType = CDSpec | CDFun | CDThm | CDProp | CDVal
     deriving Eq
 
-data Declarations = Declarations {
-                   specs     :: [(DeclPos,SpecDecl)]
+data InvalidDeclarations = 
+        InvalidDeclarations { inSpecs     :: [ErrInDecl  SpecDecl]
+                            , inFunctions :: [ErrInDecl  FunDecl]
+                            , inTheorems  :: [ErrInDecl  ThmDecl]
+                            , inProps     :: [ErrInDecl  PropDecl]
+                            , inVals      :: [ErrInDecl  ValDecl]
+                            , inDerivs    :: [ErrInDeriv DerivDecl]
+                            }
+
+data Declarations = 
+    Declarations { specs     :: [(DeclPos,SpecDecl)]
                  , functions :: [(DeclPos,FunDecl)]
                  , theorems  :: [(DeclPos,ThmDecl)]
                  , props     :: [(DeclPos,PropDecl)]
@@ -42,8 +55,24 @@ data Declarations = Declarations {
                  , indTypes  :: [(Type,IndType)] -- Si luego extendemos para declarar tipos, este campo del environment va agregando cada uno de
                                            -- los nuevos tipos declarados. Por ahora usaremos solo el valor inicial que le pasamos,
                                            -- el cual contiene los tipos basicos de Equ.
-            }
+                 }
 
+filterValidDecls :: Declarations -> InvalidDeclarations -> Declarations                 
+filterValidDecls vds ivds = 
+             Declarations
+                (L.filter (`notIn` (inSpecs ivds)) $ specs vds)
+                (L.filter (`notIn` (inFunctions ivds)) $ functions vds)
+                (L.filter (`notIn` (inTheorems ivds)) $ theorems vds)
+                (L.filter (`notIn` (inProps ivds)) $ props vds)
+                (L.filter (`notIn` (inVals ivds)) $ vals vds)
+                (L.filter (`notIn'` (inDerivs ivds)) $ derivs vds)
+                []
+    where
+        notIn' :: (Eq d, Decl d) => (DeclPos,d) -> [ErrInDeriv d] -> Bool
+        notIn' (_,d) errds = d `L.notElem` (L.map snd errds)
+        notIn :: (Eq d, Decl d) => (DeclPos,d) -> [ErrInDecl d] -> Bool
+        notIn (_,d) errds = d `L.notElem` (L.map eDecl errds)
+                 
 concatDeclarations :: Declarations -> Declarations -> Declarations
 concatDeclarations d d' = Declarations 
                             (specs d ++ specs d')
@@ -254,6 +283,16 @@ mapIndTypes = [ (TyAtom ATyNat,natural)
               , (TyAtom ATyBool,bool)
               , (TyList (tyVar "A"), list)
               ]
+
+emptyInDeclarations :: InvalidDeclarations
+emptyInDeclarations = 
+     InvalidDeclarations { inSpecs      = []
+                         , inFunctions  = []
+                         , inTheorems   = []
+                         , inProps      = []
+                         , inVals       = []
+                         , inDerivs     = []
+                         }
 
 initDeclarations :: Declarations
 initDeclarations = Declarations {
