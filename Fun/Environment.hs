@@ -1,6 +1,7 @@
 -- | Environment es el conjunto de módulos que se tienen cargados en un momento dado
 --   en Fun. Cada vez que se hace un import desde un módulo, debe referirse a un
 --   módulo que se encuentre en el environment.
+{-# Language DoAndIfThenElse #-}
 module Fun.Environment where
 
 import Fun.Module
@@ -13,12 +14,14 @@ import Fun.Decl(FunDecl)
 import Fun.Declarations
 import Fun.Verification
 import Fun.Derivation
+import Fun.TypeChecker
 
 import Data.Either (lefts,rights,partitionEithers)
 import qualified Data.List as L (map,elem,filter,notElem,nub)
 import Data.Text (unpack,pack)
 import Data.Graph.Inductive
 import Data.Graph.Inductive.Query.DFS (reachable)
+
 
 import Control.Applicative ((<$>))
 import Control.Monad (foldM)
@@ -102,7 +105,14 @@ checkModule m = do
                        , verifications = cverifs
                        , invalidDecls = InvalidDeclsAndVerifs inDeclarations inverifs
                        }
-            in updateModuleEnv m' >> return Nothing
+                funcs = functions . validDecls $ m'
+            in
+            case typeCheckDeclarations (map snd funcs) of
+               Left e -> liftIO (putStrLn (show e)) >>
+                        return (Just $ createError (modName m) ([],[],[],[],[],[]))
+               Right funcs' -> let m' = m {validDecls = (validDecls m) { functions = zipWith (\(a,_) f -> (a,f)) funcs funcs' }}
+                              in updateModuleEnv m' >> return Nothing
+
         (e1,e2,e3,e4,(e5,_),(e6,_)) -> 
             return . Just $ createError (modName m) (e1,e2,e3,e4,e5,e6)
     where
@@ -131,9 +141,9 @@ loadMainModule modN = do
                 (mErr,st) <- runStateT (loadAndCheck m) initCM
                 maybe (return $ Right $ modulesEnv st) (return . Left) mErr
               ) mParsedM
-    where
-        loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
-        loadAndCheck m = loadEnv m >>= maybe checkEnvModules (return . Just)
+    where loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
+          loadAndCheck m = loadEnv m >>= maybe checkEnvModules (return . Just)
+
 
 -- | Carga los módulos en al environment, esto implica parsear el módulo inicial
 -- y cargarlo, así como los imports en cadena.
