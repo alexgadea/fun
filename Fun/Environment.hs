@@ -22,8 +22,13 @@ import Data.Text (unpack,pack)
 import Data.Graph.Inductive
 import Data.Graph.Inductive.Query.DFS (reachable)
 
+<<<<<<< HEAD
+=======
+import Data.Maybe
+>>>>>>> 12840dc139817ba2b00fb4ae0883227fd96599ea
 
 import Control.Applicative ((<$>))
+import Control.Arrow ((***),second)
 import Control.Monad (foldM)
 import Data.Functor.Identity
 import Control.Monad.IO.Class (liftIO)
@@ -101,10 +106,15 @@ checkModule m = do
     case (invalidSpec, invalidFuns, invalidVals, invalidThm, checkedVerifs,checkedDerivs) of
         ([],[],[],_,(inverifs,cverifs),(_,cderivs)) ->
             -- Agregamos al modulo las definiciones de funciones derivadas
-            let m' = m { validDecls = updateValidDecls (validDecls m) inDeclarations cderivs
+            -- let m' = m { decls = (decls m) {functions = functions (decls m) ++ cderivs}
+            --            , verifications = cverifs
+            --            }
+            let funcs = functions (decls m) ++ cderivs -- functions moduleDecls ++ cderivs in
+                m' = m { decls = (decls m) {functions = funcs }
                        , verifications = cverifs
                        , invalidDecls = InvalidDeclsAndVerifs inDeclarations inverifs
                        }
+<<<<<<< HEAD
                 funcs = functions . validDecls $ m'
             in
             case typeCheckDeclarations (map snd funcs) of
@@ -113,6 +123,16 @@ checkModule m = do
                Right funcs' -> let m' = m {validDecls = (validDecls m) { functions = zipWith (\(a,_) f -> (a,f)) funcs funcs' }}
                               in updateModuleEnv m' >> return Nothing
 
+=======
+            in
+            case typeCheckDeclarations (map snd funcs) of
+              Left _ -> return . Just $ createError (modName m) ([],[],[],[],[],[])
+              Right funcs' -> let funs = zipWith (\(a,_) f -> (a,f)) funcs funcs'
+                             in let m' = m {validDecls = (validDecls m) { functions = funs }}
+                                in updateModuleEnv m' >> return Nothing
+
+--            in updateModuleEnv m' >> return Nothing
+>>>>>>> 12840dc139817ba2b00fb4ae0883227fd96599ea
         (e1,e2,e3,e4,(e5,_),(e6,_)) -> 
             return . Just $ createError (modName m) (e1,e2,e3,e4,e5,e6)
     where
@@ -129,6 +149,14 @@ checkModule m = do
                 update m' = if m == m' then m else m'
                 
         imThms imds = maybe [] (map snd . theorems) imds
+
+--             let funcs = functions moduleDecls ++ cderivs
+-- --                m' = m {decls = (decls m) { functions = funcs }}
+
+--             case typeCheckDeclarations (map snd funcs) of
+--               Left _ -> return . Just $ createError (modName m) ([],[],[],[],[],[])
+--               Right funcs' -> let m' = m {decls = (decls m) { functions = zipWith (\(a,_) f -> (a,f)) funcs funcs' }}
+--                              in modify (second $ addModuleEnv m') >> return Nothing
 
 -- | Dado un nombre de módulo, comienza la carga buscado en el archivo
 -- correspondiente al módulo.
@@ -183,18 +211,15 @@ parseFromFileModule fp = readModule (unpack fp) >>= \eitherS ->
                         either (return . Left) (return . load) eitherS
     where
         load :: String -> Either ModuleError Module
-        load s = case (parseFromStringModule s) of
-                    Left err -> Left $ ModuleParseError fp err
-                    Right m -> Right m
-        readModule :: FilePath -> IO (Either ModuleError String)
-        readModule fp =
-                    C.catch (readFile fp)
-                             (\e -> do 
-                                    let err = show (e :: C.IOException) 
-                                    return "ModuleError") >>= \eErr ->
-                    case eErr of
-                        "ModuleError" -> return $ Left $ ModuleErrorFileDoesntExist $ pack fp
-                        _ -> return $ Right eErr
+        load = either (Left . ModuleParseError (pack "")) Right . parseFromStringModule 
+
+readModule :: FilePath -> IO (Either ModuleError String)
+readModule fp = C.catch (readFile fp)
+                (\e -> do let err = show (e :: C.IOException)  in
+                             return "ModuleError") >>= \eErr ->
+                case eErr of
+                  "ModuleError" -> return $ Left $ ModuleErrorFileDoesntExist $ pack fp
+                  _ -> return $ Right eErr
 
 loadMainModuleFromFile :: TextFilePath -> IO (Either ModuleError (Environment,ModName))
 loadMainModuleFromFile fp = do

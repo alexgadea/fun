@@ -76,9 +76,12 @@ data TCCtx = TCCtx { vars :: CtxSyn VarName
 type TMErr = TyErr
 
 data TCError = TCError String
+<<<<<<< HEAD
              
 instance Show TCError where
     show (TCError e) = e
+=======
+>>>>>>> 12840dc139817ba2b00fb4ae0883227fd96599ea
 
 -- | La m&#243;nada de estado del type-checker.
 type TyState a = TIMonad a
