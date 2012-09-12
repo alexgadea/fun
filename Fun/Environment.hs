@@ -22,10 +22,8 @@ import Data.Text (unpack,pack)
 import Data.Graph.Inductive
 import Data.Graph.Inductive.Query.DFS (reachable)
 
-<<<<<<< HEAD
-=======
 import Data.Maybe
->>>>>>> 12840dc139817ba2b00fb4ae0883227fd96599ea
+
 
 import Control.Applicative ((<$>))
 import Control.Arrow ((***),second)
@@ -109,12 +107,10 @@ checkModule m = do
             -- let m' = m { decls = (decls m) {functions = functions (decls m) ++ cderivs}
             --            , verifications = cverifs
             --            }
-            let funcs = functions (decls m) ++ cderivs -- functions moduleDecls ++ cderivs in
-                m' = m { decls = (decls m) {functions = funcs }
+            let m' = m { validDecls = updateValidDecls (validDecls m) inDeclarations cderivs
                        , verifications = cverifs
                        , invalidDecls = InvalidDeclsAndVerifs inDeclarations inverifs
                        }
-<<<<<<< HEAD
                 funcs = functions . validDecls $ m'
             in
             case typeCheckDeclarations (map snd funcs) of
@@ -123,16 +119,6 @@ checkModule m = do
                Right funcs' -> let m' = m {validDecls = (validDecls m) { functions = zipWith (\(a,_) f -> (a,f)) funcs funcs' }}
                               in updateModuleEnv m' >> return Nothing
 
-=======
-            in
-            case typeCheckDeclarations (map snd funcs) of
-              Left _ -> return . Just $ createError (modName m) ([],[],[],[],[],[])
-              Right funcs' -> let funs = zipWith (\(a,_) f -> (a,f)) funcs funcs'
-                             in let m' = m {validDecls = (validDecls m) { functions = funs }}
-                                in updateModuleEnv m' >> return Nothing
-
---            in updateModuleEnv m' >> return Nothing
->>>>>>> 12840dc139817ba2b00fb4ae0883227fd96599ea
         (e1,e2,e3,e4,(e5,_),(e6,_)) -> 
             return . Just $ createError (modName m) (e1,e2,e3,e4,e5,e6)
     where

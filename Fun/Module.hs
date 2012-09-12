@@ -40,8 +40,4 @@ instance Show Module where
 data Import = Import ModName
     deriving (Eq, Show)
 
-<<<<<<< HEAD
--- modifyFunDeclMod f m = m { decls = modifyFunDecl f (decls m) }
-=======
->>>>>>> 12840dc139817ba2b00fb4ae0883227fd96599ea
 

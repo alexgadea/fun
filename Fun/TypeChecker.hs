@@ -24,14 +24,6 @@ import Lens.Family.TH
 import System.IO.Unsafe
 
 type Ass = Map VarName [Type]
-
-<<<<<<< HEAD
-=======
-
-checkBasic :: Ass -> Basic -> TIMonad Ass
-checkBasic = undefined
-
->>>>>>> 12840dc139817ba2b00fb4ae0883227fd96599ea
 checkDecl :: Ass -> Variable -> [Variable] -> PreExpr -> TIMonad Ass
 checkDecl ass fun args body = case varTy fun of 
                                 TyUnknown -> checkUntypedDecl ass fun args body
@@ -40,10 +32,6 @@ checkDecl ass fun args body = case varTy fun of
 checkSpecDecl :: Ass -> SpecDecl -> TIMonad Ass
 checkSpecDecl ass (Spec fun args body) = checkDecl ass fun args body
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 12840dc139817ba2b00fb4ae0883227fd96599ea
 checkFunDecl :: Ass -> FunDecl -> TIMonad Ass
 checkFunDecl ass (Fun fun args body _) = checkDecl ass fun args body
 
@@ -110,20 +98,6 @@ withoutLocal = foldr (delete . varName)
 localState :: [Variable] -> TIMonad ()
 localState args = modify (\st -> st { ctx = (ctx st) {vars = withoutLocal (vars (ctx st)) args} })
 
-<<<<<<< HEAD
-=======
-
--- :l Fun.TypeChecker Fun.Environment
--- :m + Fun.Environment
--- analyse str = str >>= loadMainModuleFromString >>= 
---               either (error . show) (return . getFuncs . fst) >>= \env ->
---               case runStateT (tcheckModule (reverse env)) (TCState empty initCtx 0) of
---                 Left (TCError err) -> putStrLn  err
---                 Right (a,s) -> putStrLn $ unlines [ show a, show s]
-
--- let c = readFile "/home/miguel/work/theona/fun/ModuleExamples/TestModule-Miguel.fun"
-
->>>>>>> 12840dc139817ba2b00fb4ae0883227fd96599ea
 typeCheckDeclarations :: [FunDecl] -> Either [TCError] [FunDecl]
 typeCheckDeclarations env = case runStateT (tcheckModule (reverse env)) (TCState empty initCtx 0) of
                               Left err -> Left [err]
