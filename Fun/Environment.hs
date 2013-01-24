@@ -21,6 +21,7 @@ import qualified Data.List as L (map,elem,filter,notElem,nub)
 import Data.Text (unpack,pack)
 import Data.Graph.Inductive
 import Data.Graph.Inductive.Query.DFS (reachable)
+import Data.List(find)
 
 import Data.Maybe
 
@@ -116,8 +117,8 @@ checkModule m = do
             case typeCheckDeclarations (map snd funcs) of
                Left e -> liftIO (putStrLn (show e)) >>
                         return (Just $ createError (modName m) ([],[],[],[],[],[]))
-               Right funcs' -> let m' = m {validDecls = (validDecls m) { functions = zipWith (\(a,_) f -> (a,f)) funcs funcs' }}
-                              in updateModuleEnv m' >> return Nothing
+               Right funcs' -> let m'' = m' {validDecls = (validDecls m') { functions = zipWith (\(a,_) f -> (a,f)) funcs funcs' }}
+                              in updateModuleEnv m'' >> return Nothing
 
         (e1,e2,e3,e4,(e5,_),(e6,_)) -> 
             return . Just $ createError (modName m) (e1,e2,e3,e4,e5,e6)
@@ -233,3 +234,7 @@ loadMainModuleFromString s = do
     where
         loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
         loadAndCheck m = loadEnv m >>= maybe checkEnvModules (return . Just)
+
+getModule :: Environment -> ModName -> Maybe Module
+getModule env mname = find (\m -> (modName m) == mname) env
+        

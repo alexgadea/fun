@@ -13,6 +13,7 @@ data InvalidDeclsAndVerifs =
         InvalidDeclsAndVerifs { decls  :: InvalidDeclarations
                               , verifs :: [ErrInVerif Verification]
                               }
+    deriving Show
                             
 data Module = Module { modName       :: ModName
                      , imports       :: [Import]
@@ -34,6 +35,8 @@ instance Show Module where
                      , "Decls: " ++ show (validDecls m)
                      , ""
                      , "Verifications : " ++ show (verifications m)
+                     , "Derivations : " ++ show (derivations m)
+                     , "Invalid Decls : " ++ show (invalidDecls m)
                      , "=========================="
                      ]
 
@@ -41,3 +44,14 @@ data Import = Import ModName
     deriving (Eq, Show)
 
 
+allDeclsValid :: Module -> Bool
+allDeclsValid m = 
+    let invd = decls (invalidDecls m) in
+        inSpecs invd == [] && inFunctions invd == [] &&
+        inTheorems invd == [] && inProps invd == [] &&
+        inVals invd == [] && inVals invd == [] &&
+        inDerivs invd == [] &&
+        verifs (invalidDecls m) == []
+    
+    
+    

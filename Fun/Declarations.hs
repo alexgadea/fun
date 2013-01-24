@@ -44,6 +44,7 @@ data InvalidDeclarations =
                             , inVals      :: [ErrInDecl  ValDecl]
                             , inDerivs    :: [ErrInDeriv DerivDecl]
                             }
+    deriving Show
 
 data Declarations = 
     Declarations { specs     :: [(DeclPos,SpecDecl)]
