@@ -83,7 +83,7 @@ checkModule m = do
     let invalidFuns = lefts $ checkFuns  (validDecls m) mImportedDecls
     let invalidVals = lefts $ checkVals  (validDecls m) mImportedDecls
         
-    let thmsCheck = checkThm   (validDecls m) mImportedDecls
+    let thmsCheck = checkThm (validDecls m) mImportedDecls
     let invalidThm  = lefts thmsCheck
     -- buscamos las derivaciones. Si hay derivaciones sin especificación, o
     -- derivaciones repetidas, entonces la lista eDerivs tendrá errores de derivación.
