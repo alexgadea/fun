@@ -141,6 +141,7 @@ find'' :: [Maybe a] -> Maybe a
 find'' = foldr max' Nothing 
     where max' Nothing (Just x) = Just x
           max' (Just x) Nothing = Just x
+          max' (Just x) (Just _) = Just x
           max' _ _ = Nothing
 
 isCan :: PreExpr -> EvState Bool

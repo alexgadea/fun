@@ -52,10 +52,10 @@ notOpRules = (folNeg, [(true,false),(false,true)])
           false = Con folFalse
 
 
-env :: Env
-env = initEnv { decls = [idFunDecl,fstFunDecl,twiceDecl,isZero]
-              }
+-- env :: Env
+-- env = initEnv { decls = [idFunDecl,fstFunDecl,twiceDecl,isZero]
+--               }
 
 
 
-test f p = either error (putStrLn . p) . flip runReaderT (Eager,env,funTheory) . f
+-- test f p = either error (putStrLn . p) . flip runReaderT (Eager,env,funTheory) . f

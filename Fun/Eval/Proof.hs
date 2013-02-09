@@ -57,7 +57,7 @@ proofDone prf env = either (const False) id .
                     either (const $ return False) (isCan . E.toExpr) $ getEnd prf
 
 evalToProof :: PreExpr -> EvState Proof
-evalToProof e@(Var _) = fail' "evalVar"
+evalToProof e@(Var v) = fail' $ "evalVar" ++ show v
 evalToProof e@(Con _) = fail' "evalCon"
 evalToProof e@(Paren _) = evalSubExpr e E.goDown
 evalToProof e@(UnOp op e') =  isCan e' >>= \cane' ->
