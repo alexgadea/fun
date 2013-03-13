@@ -1,202 +1,360 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Fun.Eval.Rules where
 
-import Lens.Family
-import Lens.Family.TH
-
-import Fun.Decl
-import Fun.Environment
-import Fun.Theory
-
-
+import Equ.Theories.Arith
+import Equ.Theories.FOL
+import Equ.Theories.List
+import Equ.Expr
 import Equ.PreExpr
-import Equ.Syntax 
+import Equ.Types
 import Equ.Matching
 
-import Equ.TypeChecker(getType,unificate)
-import Equ.IndType
-import Equ.IndTypes
-import Equ.Types
+import Data.Text(Text(..))
+import Data.Maybe(catMaybes)
+import Control.Monad
 
-import Data.List(find)
-import Data.Maybe(fromMaybe)
+import System.IO.Unsafe(unsafePerformIO)
 
-import Control.Monad((>=>),join)
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Reader
-import Control.Arrow ((&&&),(***),first)
-import Control.Applicative((<$>),liftA2)
-import Data.Function(on)
+import Prelude hiding(pred,sum,length,concat,take,drop,and,or)
 
-data EvOrder = Eager | Normal
-             deriving Show
+-- | Para cada teoría definimos las reglas de cada operador
 
--- | La evaluación de una expresión puede ser correcta o incorrecta.
-type EvalM = Either String 
+-- | Arith: Operadores Sucesor, Suma, Producto, Predecesor, Resta
 
--- | Las reglas que definen el comportamiento de operadores consisten
--- en un mapeo de patrones a expresiones.
+data EvalRule = EvalRule {
+        lexpr :: Expr
+      , rexpr :: Expr
+      , name :: Text
+}
 
-data Env = Env { decls :: [FunDecl] }
+-- | Clasificamos las reglas según la forma de las expresiones
+binOpRules = [ePlusZero,ePlusSucc,eProdZero,eProdSucc,eMinZero,eMinSucc,
+              eAndTrue,eAndFalse,eOrTrue,eOrFalse,eImplTrue,
+              eImplFalse,eConsecTrue,eConsecFalse,eEquivTrue,eEquivFalse,
+              eDiscrepTrue,eDiscrepFalse,eConcatEmpty,eConcatNotEmpty,
+              eIndexZero,eIndexSucc,eTakeEmpty,eTakeZero,eTakeSucc,
+              eDropEmpty,eDropZero,eDropSucc]
 
-instance Show Env where
-    show (Env []) = "Entorno vacío"
-    show (Env decls) = unlines $ map show decls
+unOpRules = [ePredSucc,
+             eNegTrue,eNegFalse,
+             eLongEmpty,eLongNotEmpty]
 
-data EvalEnv = EvalEnv { _order :: EvOrder
-                       , _env   :: Env
-                       , _theories :: [Theory]
-                       }
-$(mkLenses ''EvalEnv)
+ifRules = [eIfTrue,eIfFalse]
 
-type EvState a = ReaderT EvalEnv EvalM a
+-- | Dada una expresión e y una regla r, realiza matching entre la expresión
+--   izquierda de r y e, retornando la substitución aplicada a la expresion derecha
+--   de la regla.
+matchRule :: PreExpr -> EvalRule -> Maybe PreExpr
+matchRule e r =
+    either (const Nothing)  
+           (-- ver qué pasa con el otro elemento que retorna match)
+            \(subst,_) -> return (rexpr r) >>=
+            \(Expr re) -> return (applySubst re subst))
+           (match lpreexpr e)
+           
+    where Expr lpreexpr = lexpr r
+    
+-- | Dada una expresión e y una lista de reglas rs, llama a matchRule
+--   con cada regla, retornando la substitución de la primera que haya
+--   tenido éxito.
+matchRules :: PreExpr -> [EvalRule] -> Maybe PreExpr
+matchRules e rs = return (catMaybes $ map (matchRule e) rs) >>=
+                  \ls -> case ls of
+                              [] -> Nothing
+                              (l:_) -> return l
 
-getEnv :: EvState Env
-getEnv = asks ((^. env))
+-- Variables para las reglas:
 
-getOrder :: EvState EvOrder
-getOrder = asks ((^. order))
+varZ1 = Expr $ Var $ var "z1" $ TyVar "A"
+varZ2 = Expr $ Var $ var "z2" $ TyVar "A"
+varZ3 = Expr $ Var $ var "z3" $ TyVar "A"
 
-getTheories :: EvState [Theory]
-getTheories = asks ((^. theories))
+-- Reglas:
 
--- | Una aplicación parcial de una función a varios argumentos.
-type PartialApp = (Func,[PreExpr])
+-- *** NATURALES ***
 
--- | Reglas de evaluacion
-data Eval = EvConst Constant
-          | EvFun Func
-          | EvVar Variable
-          | EvUnary Operator 
-          | EvBinary Operator
-          | IfTrue 
-          | IfFalse
-          | EvParApp PartialApp 
-          | EvApp 
-          | EvCase
+-- | SUMA
+ePlusZero :: EvalRule
+ePlusZero = EvalRule {
+                lexpr = sum zero varZ1
+              , rexpr = varZ1
+              , name = "E-PLUSCERO"
+}
 
-data Evaluation = Evaluation {
-      start :: PreExpr
-    , result :: Maybe PreExpr
-    , evaluation :: Eval
-    , premises :: [Evaluation]
-    }
+ePlusSucc :: EvalRule
+ePlusSucc = EvalRule {
+                lexpr = sum (successor varZ1) varZ2
+              , rexpr = successor (sum varZ1 varZ2)
+              , name = "E-PLUSSUCC"
+}
 
-fail' :: String -> EvState a
-fail' = lift . Left
+-- | PRODUCTO
+eProdZero :: EvalRule
+eProdZero = EvalRule {
+                lexpr = prod zero varZ1
+              , rexpr = zero
+              , name = "E-PRODCERO"
+}
 
-lookupOp :: Operator -> [OpDecl] -> Maybe ([Variable],PreExpr)
-lookupOp op = find eqOp >=> (\(OpDecl _ vs body) -> return (vs,body))
-    where eqOp (OpDecl op' _ _) = op == op'
+eProdSucc :: EvalRule
+eProdSucc = EvalRule {
+                lexpr = prod (successor varZ1) varZ2
+              , rexpr = sum (prod varZ1 varZ2) varZ2
+              , name = "E-PRODSUCC"
+}
 
-errOpNotInEnv :: Operator -> EvState a
-errOpNotInEnv op = fail' $ "Operator not declared: " ++ show op
+-- | PREDECESOR
+ePredSucc :: EvalRule
+ePredSucc = EvalRule {
+                lexpr = pred (successor varZ1)
+              , rexpr = varZ1
+              , name = "E-PREDSUCC"
+}
 
-getResult :: Evaluation -> EvState PreExpr
-getResult = maybe (fail' "No result") return . result
+-- | RESTA
+eMinZero :: EvalRule
+eMinZero = EvalRule {
+                lexpr = substr varZ1 zero
+              , rexpr = varZ1
+              , name = "E-MINCERO"
+}
 
-parApp :: PreExpr -> EvState Int
-parApp (Var f) = arity . varTy . fst' <$> findFun f
-    where fst' (x,_,_) = x
-parApp (App e _) = flip (-) 1 <$> parApp e
-parApp _ = return 0
+eMinSucc :: EvalRule
+eMinSucc = EvalRule {
+                lexpr = substr varZ1 (successor varZ2)
+              , rexpr = pred (sum varZ1 varZ2)
+              , name = "E-MINSUCC"
+}
 
-parApp' :: PreExpr -> EvState (Maybe (Int,(Variable,[Variable],PreExpr)))
-parApp' (Var f) = Just . (arity . varTy . fst' &&& id) <$> findFun f
-    where fst' (x,_,_) = x
-parApp' (App e _) = fmap (first (flip (-) 1)) <$> parApp' e
-parApp' _ = return Nothing
+-- *** BOOLEANOS ***
 
-getArgs :: PreExpr -> Maybe [PreExpr]
-getArgs (Var _) = return []
-getArgs (App (Var _) e') = return [e']
-getArgs (App e e') = (e':) <$> getArgs e
-getArgs _ = Nothing
+-- | NEGACION
+eNegTrue :: EvalRule
+eNegTrue = EvalRule {
+                lexpr = neg true
+              , rexpr = false
+              , name = "E-NEGTRUE"
+}
 
-findFunDecl :: Variable -> FunDecl -> Bool
-findFunDecl f (Fun f' _ _ _) = f == f'
+eNegFalse :: EvalRule
+eNegFalse = EvalRule {
+                lexpr = neg false
+              , rexpr = true
+              , name = "E-NEGFALSE"
+}
 
-findFun :: Variable -> EvState (Variable,[Variable],PreExpr)
-findFun f = getEnv >>= \env -> (maybe (fail' $ "Function not declared: " ++ show f ++ show env) getDecl
-            . find (findFunDecl f) 
-            . decls) env
-    where getDecl (Fun f vs e _) = return (f,vs,e)
+-- | CONJUNCION
+eAndTrue :: EvalRule
+eAndTrue = EvalRule {
+                lexpr = and true varZ1
+              , rexpr = varZ1
+              , name = "E-ANDTRUE"
+}
 
-findOpDecl :: Operator -> EvState ([Variable],PreExpr)
-findOpDecl op = getTheories >>= maybe (errOpNotInEnv op) return . lookupOp op . concatMap operators
+eAndFalse :: EvalRule
+eAndFalse = EvalRule {
+                lexpr = and false varZ1
+              , rexpr = false
+              , name = "E-ANDFALSE"
+}
 
-matching :: PreExpr -> PreExpr -> PreExpr -> Maybe PreExpr
-matching e p r = either (const Nothing) (return . applySubst r . fst) $ match p e
+-- | DISJUNCION
+eOrTrue :: EvalRule
+eOrTrue = EvalRule {
+                lexpr = or true varZ1
+              , rexpr = true
+              , name = "E-ORTRUE"
+}
 
-matchCouple :: (PreExpr,PreExpr) -> (PreExpr,PreExpr,PreExpr) -> Maybe PreExpr
-matchCouple (e,e') (p,p',res) = case subst of 
-                                  Left _ -> Nothing
-                                  Right s -> return $ applySubst res (fst s)
-    where subst = match p e >>= matchWithSubst p' e'                               
+eOrFalse :: EvalRule
+eOrFalse = EvalRule {
+                lexpr = or false varZ1
+              , rexpr = varZ1
+              , name = "E-ORFALSE"
+}
 
-firstMatching :: PreExpr -> [(PreExpr,PreExpr)] -> EvState PreExpr
-firstMatching e = maybe (fail' "First matching") return . find'' . map (uncurry (matching e))
+-- | IMPLICACION
+eImplTrue :: EvalRule
+eImplTrue = EvalRule {
+                lexpr = impl true varZ1
+              , rexpr = varZ1
+              , name = "E-IMPLTRUE"
+}
 
-find'' :: [Maybe a] -> Maybe a
-find'' = foldr max' Nothing 
-    where max' Nothing (Just x) = Just x
-          max' (Just x) Nothing = Just x
-          max' _ _ = Nothing
+eImplFalse :: EvalRule
+eImplFalse = EvalRule {
+                lexpr = impl false varZ1
+              , rexpr = true
+              , name = "E-IMPLFALSE"
+}
 
-isCan :: PreExpr -> EvState Bool
-isCan e = (fromMaybe False . canonical) <$> getTheories
-    where canonical ths = getType e >>= getIndType' ths >>= isCanonical e
+-- | CONSECUENCIA
+eConsecTrue :: EvalRule
+eConsecTrue = EvalRule {
+                lexpr = conseq true varZ1
+              , rexpr = true
+              , name = "E-CONSECTRUE"
+}
 
-isCanonical :: PreExpr -> IndType -> Maybe Bool
-isCanonical (Var _) _ = return True
-isCanonical (Paren e) ty = isCanonical e ty
-isCanonical (Con c) ty = return $ c `elem` constants ty
-isCanonical (UnOp op e) ty = (isConstructor ty op &&) <$> case opTy op of
-                               t1 :-> _ -> getType e >>=
-                                          unificate t1 >>=
-                                          join . liftToIndType (isCanonical e) 
-                               _ -> error "Impossible"
-isCanonical (BinOp op e e') ty = (isConstructor ty op &&) <$>
-                                 case opTy op of
-                                   t1 :-> t2 :-> _ -> getType e >>=
-                                                     unificate t1 >>= \t1' ->
-                                                     getType e' >>=
-                                                     unificate t2 >>= \t2' ->                                                     
-                                                     liftToIndType (isCanonical e) t1' `and'`
-                                                     liftToIndType (isCanonical e') t2'
-                                   _ -> error "Impossible"
-isCanonical(App e e') ty = case getType e of
-                              Nothing -> error "Impossible"
-                              Just (t1 :-> t2) -> getType e' >>=
-                                                 unificate t1 >>= \t1' ->
-                                                 liftToIndType (isCanonical e') t1' `and'`
-                                                 liftToIndType (isNeutral e) (t1 :-> t2)
-                              Just t -> return False
-isCanonical _ _ = return False
+eConsecFalse :: EvalRule
+eConsecFalse = EvalRule {
+                lexpr = conseq false varZ1
+              , rexpr = neg varZ1
+              , name = "E-CONSECFALSE"
+}
+
+-- | EQUIVALENCIA
+eEquivTrue :: EvalRule
+eEquivTrue = EvalRule {
+                lexpr = equiv true varZ1
+              , rexpr = varZ1
+              , name = "E-EQUIVTRUE"
+}
+
+eEquivFalse :: EvalRule
+eEquivFalse = EvalRule {
+                lexpr = equiv false varZ1
+              , rexpr = neg varZ1
+              , name = "E-EQUIVTRUE"
+}
+
+-- | DISCREPANCIA
+eDiscrepTrue :: EvalRule
+eDiscrepTrue = EvalRule {
+                lexpr = discrep true varZ1
+              , rexpr = neg varZ1
+              , name = "E-EQUIVTRUE"
+}
+
+eDiscrepFalse :: EvalRule
+eDiscrepFalse = EvalRule {
+                lexpr = discrep false varZ1
+              , rexpr = varZ1
+              , name = "E-EQUIVTRUE"
+}
+
+-- *** LISTAS ***
+
+-- | Longitud
+eLongEmpty :: EvalRule
+eLongEmpty = EvalRule {
+                lexpr = length emptyList
+              , rexpr = zero
+              , name = "E-LONGEMPTY"
+}
+
+eLongNotEmpty :: EvalRule
+eLongNotEmpty = EvalRule {
+                lexpr = length (append varZ1 varZ2)
+              , rexpr = successor (length varZ2)
+              , name = "E-LONGNOTEMPTY"
+}
+
+-- | Concatenación
+eConcatEmpty :: EvalRule
+eConcatEmpty = EvalRule {
+                lexpr = concat emptyList varZ1
+              , rexpr = varZ1
+              , name = "E-CONCATEMPTY"
+}
+
+eConcatNotEmpty :: EvalRule
+eConcatNotEmpty = EvalRule {
+                lexpr = concat (append varZ1 varZ2) varZ3
+              , rexpr = append varZ1 (concat varZ2 varZ3)
+              , name = "E-CONCATNOTEMPTY"
+}
+
+-- | Indexado
+eIndexZero :: EvalRule
+eIndexZero = EvalRule {
+                lexpr = index (append varZ1 varZ2) zero
+              , rexpr = varZ1
+              , name = "E-INDEXCERO"
+}
+
+eIndexSucc :: EvalRule
+eIndexSucc = EvalRule {
+                lexpr = index (append varZ1 varZ2) (successor varZ3)
+              , rexpr = index varZ2 varZ3
+              , name = "E-INDEXSUCC"
+}
+
+-- | Take
+eTakeEmpty :: EvalRule
+eTakeEmpty = EvalRule {
+                lexpr = take emptyList varZ1
+              , rexpr = emptyList
+              , name = "E-TAKEEMPTY"
+}
+
+eTakeZero :: EvalRule
+eTakeZero = EvalRule {
+                lexpr = take varZ1 zero
+              , rexpr = emptyList
+              , name = "E-TAKECERO"
+}
+
+eTakeSucc :: EvalRule
+eTakeSucc = EvalRule {
+                lexpr = take (append varZ1 varZ2) (successor varZ3)
+              , rexpr = append varZ1 (take varZ2 varZ3)
+              , name = "E-TAKESUCC"
+}
+
+-- | Drop
+eDropEmpty :: EvalRule
+eDropEmpty = EvalRule {
+                lexpr = drop emptyList varZ1
+              , rexpr = emptyList
+              , name = "E-DROPEMPTY"
+}
+
+eDropZero :: EvalRule
+eDropZero = EvalRule {
+                lexpr = drop varZ1 zero
+              , rexpr = varZ1
+              , name = "E-DROPCERO"
+}
+
+eDropSucc :: EvalRule
+eDropSucc = EvalRule {
+                lexpr = drop (append varZ1 varZ2) (successor varZ3)
+              , rexpr = take varZ2 varZ3
+              , name = "E-DROPSUCC"
+}
 
 
-isNeutral :: PreExpr -> IndType -> Maybe Bool
-isNeutral (UnOp op _) t = return $ isConstructor t op
-isNeutral (BinOp op _ _) t = return $ isConstructor t op
-isNeutral (App e e') t = case getType e of
-                            Nothing -> error "Impossible"
-                            Just (t1 :-> t2) -> getType e' >>= unificate t1 >>= \t1' ->
-                                               liftToIndType (isNeutral e) (t1 :-> t2) `and'` 
-                                               liftToIndType (isCanonical e') t1'
-isNeutral _ _ = return True
+-- IF
 
-          
+-- | Constructor de Expresión If
+ifexpr :: Expr -> Expr -> Expr -> Expr
+ifexpr (Expr b) (Expr e1) (Expr e2) = Expr $ If b e1 e2
 
-getIndType' :: [Theory] -> Type -> Maybe IndType
-getIndType' ths = join . liftToIndType (indTypeInScope ths) 
+eIfTrue :: EvalRule
+eIfTrue = EvalRule {
+                lexpr = ifexpr true varZ1 varZ2
+              , rexpr = varZ1
+              , name = "E-IFTRUE"
+}
 
-liftToIndType :: (IndType -> a) -> Type -> Maybe a
-liftToIndType f t = f <$> getIndType t
+eIfFalse :: EvalRule
+eIfFalse = EvalRule {
+                lexpr = ifexpr false varZ1 varZ2
+              , rexpr = varZ2
+              , name = "E-IFFALSE"
+}
 
 
-indTypeInScope :: [Theory] -> IndType -> Maybe IndType
-indTypeInScope ths ty = if ty `elem` concatMap indType ths 
-                        then Just ty 
-                        else Nothing
 
-and' = liftA2 (&&) `on` join
+
+
+
+
+
+
+
+
+
+
+
