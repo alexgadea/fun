@@ -88,6 +88,7 @@ ePlusSucc = EvalRule {
               , name = "E-PLUSSUCC"
 }
 
+
 -- | PRODUCTO
 eProdZero :: EvalRule
 eProdZero = EvalRule {
@@ -122,7 +123,7 @@ eMinZero = EvalRule {
 eMinSucc :: EvalRule
 eMinSucc = EvalRule {
                 lexpr = substr varZ1 (successor varZ2)
-              , rexpr = pred (sum varZ1 varZ2)
+              , rexpr = pred (substr varZ1 varZ2)
               , name = "E-MINSUCC"
 }
 

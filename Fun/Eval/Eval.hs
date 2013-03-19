@@ -7,9 +7,12 @@ import Equ.Expr
 import Equ.IndTypes(getIndType)
 import Equ.IndType
 import Equ.TypeChecker(getType)
+import Equ.Types
+import Equ.Theories.Arith
 import Equ.Matching(match)
 import Equ.Parser
 
+import Prelude hiding(sum)
 
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class(lift)
@@ -19,6 +22,7 @@ import System.IO.Unsafe(unsafePerformIO)
 import qualified Data.Map as M
 import qualified Data.Set as S
 
+import Fun.Decl
 import Fun.Eval.Rules
 
 -- | El environment tendrá las variables que son simbolo de función
@@ -131,6 +135,12 @@ evalStep e@(App v@(Var x) e2) =
        -- no esta declarada como funcion, por lo tanto no se podrá evaluar.
        -- evalStep v dará Nothing
        else evalStep v
+evalStep e@(App e1 e2) =
+    isCanonical e1 >>= \iscane1 ->
+    if iscane1
+       -- Si e1 es canónica pero no es una variable, no se puede aplicar.
+       then lift Nothing
+       else evalStep e1 >>= return . (flip App e2)
 evalStep e@(Case e' ps) =
     matchPatterns e' ps >>= \(ei,subst) ->
     return (applySubst ei subst)
@@ -166,6 +176,19 @@ applyFun v e =
     where subst x = M.fromList [(x,e)]
 
 
+-- | Crea un EvalEnv a partir de una lista de declaraciones de funciones
+createEvalEnv :: [FunDecl] -> EvalEnv
+createEvalEnv [] = M.empty
+createEvalEnv ((Fun v vs e _):fs) = M.insert v (vs,e) (createEvalEnv fs)
+
+    
 testEvalStep expr = evalStateT (evalStep expr) M.empty
                     
 testEval = eval M.empty
+
+test1 e = evalStateT (evalStep e) (M.fromList [(varF,([varX,varY],expr))])
+    where varF = var "f" $ (TyAtom ATyNat) :-> (TyAtom ATyNat)
+          varX = var "x" $ TyAtom ATyNat
+          varY = var "y" $ TyAtom ATyNat
+          Expr expr = successor (sum (Expr $ Var varX) (Expr $ Var varY))
+
