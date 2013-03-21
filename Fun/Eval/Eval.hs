@@ -15,7 +15,7 @@ import Equ.Parser
 import Prelude hiding(sum)
 
 import Control.Monad.Trans.Reader
-import Control.Monad.Trans.Class(lift)
+import Control.Monad.Trans.Class(lift,MonadTrans)
 import Control.Monad.Trans.State
 import System.IO.Unsafe(unsafePerformIO)
 
@@ -78,34 +78,24 @@ vardef v = get >>=
 --   presentada en la tesis, corresponde a aplicar el paso de evaluacion "E-CONTEXT"
 evalStep :: PreExpr -> EvalMonad PreExpr
 evalStep e@(UnOp op e') = 
-    isCanonical e' >>= \iscan ->
-    if iscan
-       then lift (matchRules e unOpRules)    
-       else evalStep e' >>= return . (UnOp op)
+    whenMT (isCanonical e')
+           (lift (matchRules e unOpRules))
+           (evalStep e' >>= return . (UnOp op))
 evalStep e@(BinOp op e1 e2) =
-    isCanonical e1 >>= \iscane1 ->
-    if iscane1
-       then isCanonical e2 >>= \iscane2 ->
-            if iscane2
-               then lift (matchRules e binOpRules)
-               else evalStep e2 >>=
-                    return . (BinOp op e1)
-       else evalStep e1 >>=
-            return . (flip (BinOp op) e2)
+    whenMT (isCanonical e1)
+           (whenMT (isCanonical e2)
+                   (lift (matchRules e binOpRules))
+                   (evalStep e2 >>= return . (BinOp op e1)))
+           (evalStep e1 >>=
+            return . (flip (BinOp op) e2))
 evalStep e@(If b e1 e2) =
-    isCanonical b >>= \iscanb ->
-    if iscanb
-       then isCanonical e1 >>= \iscane1 ->
-            if iscane1
-               then isCanonical e2 >>= \iscane2 ->
-                    if iscane2
-                       then lift (matchRules e ifRules)
-                       else evalStep e2 >>=
-                            return . (If b e1)
-            else evalStep e1 >>=
-                 return . (flip (If b) e2)
-       else evalStep b >>= \bcan ->
-            return (If bcan e1 e2)
+    whenMT (isCanonical b)
+           (whenMT (isCanonical e1)
+                   (whenMT (isCanonical e2)
+                           (lift (matchRules e ifRules))
+                           (evalStep e2 >>= return . (If b e1)))
+                   (evalStep e1 >>= return . (flip (If b) e2)))
+           (evalStep b >>= \bcan -> return (If bcan e1 e2))
             
 {- | En la tesis, tenemos expresiones lambda para expresar la evaluación de funciones.
      Aqui una variable puede ser aplicada si está en el environment de declaraciones de funciones.
@@ -126,24 +116,19 @@ evalStep e@(If b e1 e2) =
      que al tener ya un solo parámetro, se evalúa trivialmente.
 -}
 evalStep e@(App v@(Var x) e2) =
-    vardef x >>= \isdefx ->
-    if isdefx
-       then isCanonical e2 >>= \iscane2 ->
-            if iscane2
-               -- Podemos aplicar la función
-               then applyFun x e2
-               else evalStep e2 >>=
-                    return . (App v)
-       -- Si (Var x) no es una expresion canonica, significa que la variable
-       -- no esta declarada como funcion, por lo tanto no se podrá evaluar.
-       -- evalStep v dará Nothing
-       else evalStep v
+    whenMT (vardef x)
+           (whenMT (isCanonical e2)
+                   (applyFun x e2)
+                   (evalStep e2 >>=return . (App v)))
+           -- Si x no esta declarada como funcion, no se podrá evaluar.
+           -- evalStep v dará Nothing
+           (evalStep v)
+           
 evalStep e@(App e1 e2) =
-    isCanonical e1 >>= \iscane1 ->
-    if iscane1
-       -- Si e1 es canónica pero no es una variable, no se puede aplicar.
-       then lift Nothing
-       else evalStep e1 >>= return . (flip App e2)
+    whenMT (isCanonical e1)
+           -- Si e1 es canónica pero no es una variable, no se puede aplicar.
+           (lift Nothing)
+           (evalStep e1 >>= return . (flip App e2))
 evalStep e@(Case e' ps) =
     matchPatterns e' ps >>= \(ei,subst) ->
     return (applySubst ei subst)
@@ -159,14 +144,12 @@ evalStep e@(Case e' ps) =
                      (match p1 e)
 evalStep (Paren e) = evalStep e
 evalStep e@(Var x) = 
-    vardef x >>= \isdef ->
-    if isdef
-       then get >>=
-            lift . M.lookup x >>= \(vars,edef) ->
+    whenMT (vardef x)
+           (get >>= lift . M.lookup x >>= \(vars,edef) ->
             if vars==[]
                then return edef
-               else lift Nothing
-       else lift Nothing
+               else lift Nothing)
+           (lift Nothing)
 evalStep _ = lift Nothing
                       
 
@@ -208,3 +191,14 @@ test1 e = evalStateT (evalStep e) (M.fromList [(varF,([varX,varY],expr))])
           varY = var "y" $ TyAtom ATyNat
           Expr expr = successor (sum (Expr $ Var varX) (Expr $ Var varY))
 
+
+          
+whenMT :: (MonadTrans t, Monad (t m)) => t m Bool -> t m a -> t m a -> t m a
+whenMT mb acTrue acFalse =
+    mb >>= \b ->
+    if b
+       then acTrue
+       else acFalse
+    
+    
+          
