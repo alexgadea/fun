@@ -62,12 +62,15 @@ isCanonical e@(BinOp op e' e'') =
                else return False
 -- Una variable es canónica si es un símbolo de función
 -- (es una expresión lambda)
-isCanonical e@(Var x) =
-    get >>=
-    return . (M.member x)
-    
+-- isCanonical e@(Var x) =
+--     get >>=
+--     return . (M.member x)
 isCanonical _ = return False
 
+
+vardef :: Variable -> EvalMonad Bool
+vardef v = get >>=
+           return . M.member v
 
 -- | Un paso de evaluación.
 --   Si la expresión que se quiere evaluar no tiene las subexpresiones
@@ -123,8 +126,8 @@ evalStep e@(If b e1 e2) =
      que al tener ya un solo parámetro, se evalúa trivialmente.
 -}
 evalStep e@(App v@(Var x) e2) =
-    isCanonical v >>= \iscanv ->
-    if iscanv
+    vardef x >>= \isdefx ->
+    if isdefx
        then isCanonical e2 >>= \iscane2 ->
             if iscane2
                -- Podemos aplicar la función
@@ -155,6 +158,15 @@ evalStep e@(Case e' ps) =
                      (\(subst,_) -> return (e1,subst))
                      (match p1 e)
 evalStep (Paren e) = evalStep e
+evalStep e@(Var x) = 
+    vardef x >>= \isdef ->
+    if isdef
+       then get >>=
+            lift . M.lookup x >>= \(vars,edef) ->
+            if vars==[]
+               then return edef
+               else lift Nothing
+       else lift Nothing
 evalStep _ = lift Nothing
                       
 
@@ -164,7 +176,8 @@ applyFun v e =
     get >>= \env ->
     lift (M.lookup v env) >>= \(vars,edef) ->
     case vars of
-         [] -> return edef
+         -- Si una función 0-aria es aplicada, hay un error de tipo
+         [] -> lift Nothing
          [x] -> return (applySubst edef (subst x))
          (y:vs) -> return (freshVar $ S.fromList $ M.keys env) >>= \vnew ->
                    -- creamos la nueva funcion, la cual tiene un parámetro menos
@@ -177,9 +190,12 @@ applyFun v e =
 
 
 -- | Crea un EvalEnv a partir de una lista de declaraciones de funciones
-createEvalEnv :: [FunDecl] -> EvalEnv
-createEvalEnv [] = M.empty
-createEvalEnv ((Fun v vs e _):fs) = M.insert v (vs,e) (createEvalEnv fs)
+createEvalEnv :: [FunDecl] -> [ValDecl] -> EvalEnv
+createEvalEnv fs vs = M.union (addFunDecls fs)
+                               (addValDecls vs)
+
+    where addFunDecls = foldl (\m (Fun v vs e _) -> M.insert v (vs,e) m) M.empty
+          addValDecls = foldl (\m (Val v e) -> M.insert v ([],e) m) M.empty
 
     
 testEvalStep expr = evalStateT (evalStep expr) M.empty

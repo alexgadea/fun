@@ -10,7 +10,7 @@ import Fun.Module.Error
 import Fun.Parser 
 import Fun.Parser.Internal
 import Fun.Parser.Module
-import Fun.Decl(FunDecl)
+import Fun.Decl(FunDecl,ValDecl)
 import Fun.Declarations
 import Fun.Verification
 import Fun.Derivation
@@ -191,6 +191,9 @@ loadEnv m = foldM (\ may (Import mn) ->
 -- Queries for environments
 getFuncs :: Environment -> [FunDecl]
 getFuncs = concatMap (map snd . functions . validDecls)
+
+getVals :: Environment -> [ValDecl]
+getVals = concatMap (map snd . vals . validDecls)
 
 -- | Parsea una módulo en base a una dirección de archivo.
 parseFromFileModule :: TextFilePath -> IO (Either ModuleError Module)

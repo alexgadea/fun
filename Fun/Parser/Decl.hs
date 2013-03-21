@@ -229,6 +229,7 @@ parseVal modName = parseVar >>= \v -> getParserState >>= \state ->
                 keywordDefSymbol >> parseExpr
                 >>= \e ->
                 many (whites <|> tryNewline) >> 
+                keywordEnd >>
                 getParserState >>= \state ->
                 (\declPos -> modifyState (\st -> 
                     st {pDecls = envAddVal (pDecls st) (declPos,Val v e)})
