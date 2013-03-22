@@ -32,6 +32,20 @@ type EvalEnv = M.Map Variable ([Variable],PreExpr)
 type EvalMonad a = StateT EvalEnv Maybe a
 
 
+
+-- | Las expresiones constantes, aplicacion de operadores
+--   e if, tienen reglas mediante las cuales se evaluan.
+--   La aplicación de variables, la expresión por casos y las
+--   variables definidas tienen reglas únicas, por lo cual
+--   son consideradas especialmente. Definimos un tipo de dato
+--   para referirnos a cada una de esas reglas especiales.
+data SpecialRule a = SpecialRule {
+                        appRule :: a
+                      , caseRule :: a
+                      , varRule :: a
+                    }
+
+    
 -- | Esta sería la función principal de evaluación
 --   Toma una expresión cualquiera y devuelve una expresión canónica.
 --   Se asume que las expresiones ESTAN BIEN TIPADAS
@@ -41,6 +55,14 @@ eval env e =
           (\(e',env') -> eval env' e')
           (runStateT (evalStep e) env)
                 
+evalTrace :: EvalEnv -> PreExpr -> (PreExpr,[(String,PreExpr)])
+evalTrace = evalTrace' []
+                
+evalTrace' :: [(String,PreExpr)] -> EvalEnv -> PreExpr -> (PreExpr,[(String,PreExpr)])
+evalTrace' steps env e =
+    maybe (e,steps)
+          (\((e',rulename),env') -> evalTrace' (steps++[(rulename,e')]) env' e')
+          (runStateT (evalStepTrace e) env)
 
 isCanonical :: PreExpr -> EvalMonad Bool
 isCanonical e@(Con c) = 
@@ -72,30 +94,47 @@ vardef :: Variable -> EvalMonad Bool
 vardef v = get >>=
            return . M.member v
 
+
+evalStep :: PreExpr -> EvalMonad PreExpr
+evalStep e = evalStep' (\e rs -> liftMaybe () $ matchRules e rs) 
+                       (SpecialRule () () ()) e
+             >>= return . fst
+           
+evalStepTrace :: PreExpr -> EvalMonad (PreExpr,String)
+evalStepTrace = evalStep' matchRulesTrace (SpecialRule "E-APP" "E-CASE" "E-VAR") 
+           
+           
 -- | Un paso de evaluación.
 --   Si la expresión que se quiere evaluar no tiene las subexpresiones
 --   canónicas, entonces el paso se aplicará a la subexpresión (en el marco de la teoria
 --   presentada en la tesis, corresponde a aplicar el paso de evaluacion "E-CONTEXT"
-evalStep :: PreExpr -> EvalMonad PreExpr
-evalStep e@(UnOp op e') = 
+evalStep' :: (PreExpr -> [EvalRule] -> Maybe (PreExpr,a)) -> 
+             SpecialRule a ->
+             PreExpr -> EvalMonad (PreExpr,a)
+evalStep' mrules sr e@(UnOp op e') = 
     whenMT (isCanonical e')
-           (lift (matchRules e unOpRules))
-           (evalStep e' >>= return . (UnOp op))
-evalStep e@(BinOp op e1 e2) =
+           (lift (mrules e unOpRules))
+           (evalStep' mrules sr e' >>=
+                return . mapFst (UnOp op))
+evalStep' mrules sr e@(BinOp op e1 e2) =
     whenMT (isCanonical e1)
            (whenMT (isCanonical e2)
-                   (lift (matchRules e binOpRules))
-                   (evalStep e2 >>= return . (BinOp op e1)))
-           (evalStep e1 >>=
-            return . (flip (BinOp op) e2))
-evalStep e@(If b e1 e2) =
+                   (lift (mrules e binOpRules))
+                   (evalStep' mrules sr e2 >>=
+                        return . mapFst (BinOp op e1)))
+           (evalStep' mrules sr e1 >>= 
+            return . mapFst (flip (BinOp op) e2))
+evalStep' mrules sr e@(If b e1 e2) =
     whenMT (isCanonical b)
            (whenMT (isCanonical e1)
                    (whenMT (isCanonical e2)
-                           (lift (matchRules e ifRules))
-                           (evalStep e2 >>= return . (If b e1)))
-                   (evalStep e1 >>= return . (flip (If b) e2)))
-           (evalStep b >>= \bcan -> return (If bcan e1 e2))
+                           (lift (mrules e ifRules))
+                           (evalStep' mrules sr e2 >>=
+                                return . mapFst (If b e1)))
+                   (evalStep' mrules sr e1 >>=
+                        return . mapFst (flip (If b) e2)))
+           (evalStep' mrules sr b >>=
+                \(bcan,a) -> return (If bcan e1 e2,a))
             
 {- | En la tesis, tenemos expresiones lambda para expresar la evaluación de funciones.
      Aqui una variable puede ser aplicada si está en el environment de declaraciones de funciones.
@@ -115,23 +154,25 @@ evalStep e@(If b e1 e2) =
        
      que al tener ya un solo parámetro, se evalúa trivialmente.
 -}
-evalStep e@(App v@(Var x) e2) =
+evalStep' f sr e@(App v@(Var x) e2) =
     whenMT (vardef x)
            (whenMT (isCanonical e2)
-                   (applyFun x e2)
-                   (evalStep e2 >>=return . (App v)))
+                   (applyFun x e2 >>= \e' -> return (e',appRule sr))
+                   (evalStep' f sr e2 >>=
+                        return . mapFst (App v)))
            -- Si x no esta declarada como funcion, no se podrá evaluar.
-           -- evalStep v dará Nothing
-           (evalStep v)
+           -- evalStep' v dará Nothing
+           (evalStep' f sr v)
            
-evalStep e@(App e1 e2) =
+evalStep' f sr e@(App e1 e2) =
     whenMT (isCanonical e1)
            -- Si e1 es canónica pero no es una variable, no se puede aplicar.
            (lift Nothing)
-           (evalStep e1 >>= return . (flip App e2))
-evalStep e@(Case e' ps) =
+           (evalStep' f sr e1 >>= 
+                return . mapFst (flip App e2))
+evalStep' f sr e@(Case e' ps) =
     matchPatterns e' ps >>= \(ei,subst) ->
-    return (applySubst ei subst)
+    return (applySubst ei subst,caseRule sr)
     
     -- matchPatterns busca por un patron en la lista que matchee con la expresión e.
     -- Si lo encuentra retorna la expresión correspondiente al patrón y la substitución del matching.
@@ -142,15 +183,15 @@ evalStep e@(Case e' ps) =
               either (const $ matchPatterns e ps)
                      (\(subst,_) -> return (e1,subst))
                      (match p1 e)
-evalStep (Paren e) = evalStep e
-evalStep e@(Var x) = 
+evalStep' f sr (Paren e) = evalStep' f sr e
+evalStep' _ sr e@(Var x) = 
     whenMT (vardef x)
            (get >>= lift . M.lookup x >>= \(vars,edef) ->
             if vars==[]
-               then return edef
+               then return (edef,varRule sr)
                else lift Nothing)
            (lift Nothing)
-evalStep _ = lift Nothing
+evalStep' _ _ _ = lift Nothing
                       
 
 
@@ -201,4 +242,12 @@ whenMT mb acTrue acFalse =
        else acFalse
     
     
-          
+mapFst :: (a -> b) -> (a, c) -> (b, c)
+mapFst f (a,c) = (f a,c)
+
+mapSnd :: (c -> b) -> (a, c) -> (a, b)
+mapSnd f (a,c) = (a,f c)
+
+liftMaybe :: b -> Maybe a -> Maybe (a,b)
+liftMaybe b Nothing = Nothing
+liftMaybe b (Just a) = Just (a,b)
