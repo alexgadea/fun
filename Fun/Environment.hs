@@ -25,6 +25,7 @@ import Data.List(find)
 
 import Data.Maybe
 
+import System.FilePath.Posix
 
 import Control.Applicative ((<$>))
 import Control.Arrow ((***),second)
@@ -147,8 +148,8 @@ checkModule m = do
 
 -- | Dado un nombre de módulo, comienza la carga buscado en el archivo
 -- correspondiente al módulo.
-loadMainModule :: ModName -> IO (Either ModuleError Environment)
-loadMainModule modN = do
+loadMainModule :: FilePath -> ModName -> IO (Either ModuleError Environment)
+loadMainModule path modN = do
        mParsedM <- liftIO $ parseFromFileModule modN
        either (return . Left) 
               (\m -> do
@@ -157,23 +158,23 @@ loadMainModule modN = do
                 maybe (return $ Right $ modulesEnv st) (return . Left) mErr
               ) mParsedM
     where loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
-          loadAndCheck m = loadEnv m >>= maybe checkEnvModules (return . Just)
+          loadAndCheck m = loadEnv path m >>= maybe checkEnvModules (return . Just)
 
 
 -- | Carga los módulos en al environment, esto implica parsear el módulo inicial
 -- y cargarlo, así como los imports en cadena.
-loadEnv :: Module -> CheckModule (Maybe ModuleError)
-loadEnv m = foldM (\ may (Import mn) -> 
-                let mnf = unpack mn ++ ".fun" in
-                case may of
-                    Just merr -> return $ Just merr
-                    _-> do
-                        mParsedM <- liftIO $ parseFromFileModule (pack mnf)
-                        either (return . Just) loadEnv' mParsedM
-                  ) Nothing $ imports m
+loadEnv :: FilePath -> Module -> CheckModule (Maybe ModuleError)
+loadEnv path m = foldM (\ may (Import mn) -> 
+                    let mnf = path ++ unpack mn ++ ".fun" in
+                    case may of
+                        Just merr -> return $ Just merr
+                        _-> do
+                            mParsedM <- liftIO $ parseFromFileModule (pack mnf)
+                            either (return . Just) loadEnv' mParsedM
+                    ) Nothing $ imports m
     where
         loadEnv' :: Module -> CheckModule (Maybe ModuleError)
-        loadEnv' m = updateEnv m >> checkCycle >>= maybe (loadEnv m) (return . Just)
+        loadEnv' m = updateEnv m >> checkCycle >>= maybe (loadEnv path m) (return . Just)
         checkCycle :: CheckModule (Maybe ModuleError)
         checkCycle = do
                     st <- get
@@ -222,21 +223,23 @@ loadMainModuleFromFile fp = do
               ) mParsedM
     where
         loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
-        loadAndCheck m = loadEnv m >>= maybe checkEnvModules (return . Just)
+        loadAndCheck m =
+            let folder = (takeDirectory (unpack fp) ++ [pathSeparator]) in
+                    loadEnv folder m >>= maybe checkEnvModules (return . Just)
 
--- | Parsea un módulo desde una string.
-loadMainModuleFromString :: String -> IO (Either ModuleError (Environment,ModName))
-loadMainModuleFromString s = do
-       let mParsedM = parseFromStringModule s
-       either (return . Left . ModuleParseError (pack "")) 
-              (\m -> do
-                let initCM = initStateCM (insModuleImports m emptyImMG) [m]
-                (mErr,st) <- runStateT (loadAndCheck m) initCM
-                maybe (return $ Right (modulesEnv st,modName m)) (return . Left) mErr
-              ) mParsedM
-    where
-        loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
-        loadAndCheck m = loadEnv m >>= maybe checkEnvModules (return . Just)
+-- -- | Parsea un módulo desde una string.
+-- loadMainModuleFromString :: String -> IO (Either ModuleError (Environment,ModName))
+-- loadMainModuleFromString s = do
+--        let mParsedM = parseFromStringModule s
+--        either (return . Left . ModuleParseError (pack "")) 
+--               (\m -> do
+--                 let initCM = initStateCM (insModuleImports m emptyImMG) [m]
+--                 (mErr,st) <- runStateT (loadAndCheck m) initCM
+--                 maybe (return $ Right (modulesEnv st,modName m)) (return . Left) mErr
+--               ) mParsedM
+--     where
+--         loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
+--         loadAndCheck m = loadEnv m >>= maybe checkEnvModules (return . Just)
 
 getModule :: Environment -> ModName -> Maybe Module
 getModule env mname = find (\m -> (modName m) == mname) env

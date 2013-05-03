@@ -31,6 +31,7 @@ data EvalRule = EvalRule {
 binOpRules = [ePlusZero,ePlusSucc,eProdZero,eProdSucc,eMinZero,eMinSucc,
               eAndTrue,eAndFalse,eOrTrue,eOrFalse,eImplTrue,
               eImplFalse,eConsecTrue,eConsecFalse,eEquivTrue,eEquivFalse,
+              eEqTrue,eEqFalseZero,eEqFalseSucc,eLessTrue,eLessFalse,eLessGen,
               eDiscrepTrue,eDiscrepFalse,eConcatEmpty,eConcatNotEmpty,
               eIndexZero,eIndexSucc,eTakeEmpty,eTakeZero,eTakeSucc,
               eDropEmpty,eDropZero,eDropSucc]
@@ -247,6 +248,61 @@ eDiscrepFalse = EvalRule {
               , rexpr = varZ1
               , name =  "E-EQUIVTRUE"
 }
+
+-- | IGUALDAD
+eEqTrue :: EvalRule
+eEqTrue = EvalRule {
+                lexpr = equal zero zero
+              , rexpr = true
+              , name =  "E-EQTRUE"
+}
+
+eEqFalseZero :: EvalRule 
+eEqFalseZero = EvalRule {
+                lexpr = equal zero (successor varZ1)
+              , rexpr = false
+              , name =  "E-EQFALSECERO"
+}
+
+eEqFalseSucc :: EvalRule 
+eEqFalseSucc = EvalRule {
+                lexpr = equal (successor varZ1) zero
+              , rexpr = false
+              , name =  "E-EQFALSESUCC"
+}
+
+eEqGen :: EvalRule 
+eEqGen = EvalRule {
+                lexpr = equal (successor varZ1) (successor varZ2)
+              , rexpr = equal varZ1 varZ2
+              , name =  "E-EQGEN"
+}
+
+-- | MENOR
+
+eLessTrue :: EvalRule
+eLessTrue = EvalRule {
+                lexpr = less zero (successor varZ1)
+              , rexpr = true
+              , name =  "E-LESSTRUE"
+}
+
+eLessFalse :: EvalRule
+eLessFalse = EvalRule {
+                lexpr = less varZ1 zero
+              , rexpr = false
+              , name =  "E-LESSFALSE"
+}
+
+eLessGen :: EvalRule
+eLessGen = EvalRule {
+                lexpr = less (successor varZ1) (successor varZ2)
+              , rexpr = less varZ1 varZ2
+              , name =  "E-LESSGEN"
+}
+
+
+
 
 -- *** LISTAS ***
 

@@ -84,9 +84,8 @@ isCanonical e@(BinOp op e' e'') =
                else return False
 -- Una variable es canónica si es un símbolo de función
 -- (es una expresión lambda)
--- isCanonical e@(Var x) =
---     get >>=
---     return . (M.member x)
+isCanonical e@(Var x) = vardef x
+      
 isCanonical _ = return False
 
 
