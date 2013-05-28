@@ -31,7 +31,7 @@ data EvalRule = EvalRule {
 binOpRules = [ePlusZero,ePlusSucc,eProdZero,eProdSucc,eMinZero,eMinSucc,
               eAndTrue,eAndFalse,eOrTrue,eOrFalse,eImplTrue,
               eImplFalse,eConsecTrue,eConsecFalse,eEquivTrue,eEquivFalse,
-              eEqTrue,eEqFalseZero,eEqFalseSucc,eLessTrue,eLessFalse,eLessGen,
+              eEqTrue,eEqFalseZero,eEqFalseSucc,eEqGen,eLessTrue,eLessFalse,eLessGen,
               eDiscrepTrue,eDiscrepFalse,eConcatEmpty,eConcatNotEmpty,
               eIndexZero,eIndexSucc,eTakeEmpty,eTakeZero,eTakeSucc,
               eDropEmpty,eDropZero,eDropSucc]

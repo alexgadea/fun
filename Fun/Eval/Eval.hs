@@ -18,6 +18,7 @@ import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class(lift,MonadTrans)
 import Control.Monad.Trans.State
 import System.IO.Unsafe(unsafePerformIO)
+import System.IO(hFlush,stdout)
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -84,7 +85,8 @@ isCanonical e@(BinOp op e' e'') =
                else return False
 -- Una variable es canónica si es un símbolo de función
 -- (es una expresión lambda)
-isCanonical e@(Var x) = vardef x
+isCanonical e@(Var x) = return False
+--     vardef x
       
 isCanonical _ = return False
 
@@ -154,23 +156,30 @@ evalStep' mrules sr e@(If b e1 e2) =
      que al tener ya un solo parámetro, se evalúa trivialmente.
 -}
 evalStep' f sr e@(App v@(Var x) e2) =
+    unsafePerformIO(putStrLn "Applicacion de variable " >> hFlush stdout >> return (lift $ Just ())) >>
     whenMT (vardef x)
            (whenMT (isCanonical e2)
                    (applyFun x e2 >>= \e' -> return (e',appRule sr))
-                   (evalStep' f sr e2 >>=
-                        return . mapFst (App v)))
+                   (case e2 of
+                         Var y -> whenMT (vardef y)
+                                         (applyFun x e2 >>= \e' -> return (e',appRule sr))
+                                         (lift Nothing)
+                         _ -> (evalStep' f sr e2 >>=
+                                    return . mapFst (App v))))
            -- Si x no esta declarada como funcion, no se podrá evaluar.
            -- evalStep' v dará Nothing
            (evalStep' f sr v)
            
 evalStep' f sr e@(App e1 e2) =
+   unsafePerformIO(putStrLn "Applicacion de otra expresion" >> hFlush stdout >> return (lift $ Just ())) >>
     whenMT (isCanonical e1)
            -- Si e1 es canónica pero no es una variable, no se puede aplicar.
            (lift Nothing)
            (evalStep' f sr e1 >>= 
                 return . mapFst (flip App e2))
 evalStep' f sr e@(Case e' ps) =
-    matchPatterns e' ps >>= \(ei,subst) ->
+    unsafePerformIO(putStrLn "CASERULE!" >> hFlush stdout >> return (lift $ Just ())) >>
+    matchPatterns e' ps >>= \(ei,subst) -> unsafePerformIO(putStrLn ("matching con patron" ++ (show ei)) >>hFlush stdout >> return (lift $ Just ())) >>
     return (applySubst ei subst,caseRule sr)
     
     -- matchPatterns busca por un patron en la lista que matchee con la expresión e.
