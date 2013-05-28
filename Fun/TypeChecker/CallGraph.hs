@@ -11,8 +11,8 @@ import Data.Graph.Inductive.Query.DFS
 
 import Data.List
 import Control.Monad.Trans.State
-import Lens.Family.TH
-import Lens.Family
+import Control.Lens
+-- import Lens.Family
 
 import Control.Applicative 
 
@@ -22,7 +22,7 @@ type CallGraph = Gr Variable ()
 data GrConstr = GrConstr { _idx :: Int
                          , _nds :: [LNode Variable]
                          }
-$(mkLenses ''GrConstr)
+$(makeLenses ''GrConstr)
 
 
 initGrConstr = GrConstr 0 []

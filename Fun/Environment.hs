@@ -138,13 +138,6 @@ checkModule m = do
                 
         imThms imds = maybe [] (map snd . theorems) imds
 
---             let funcs = functions moduleDecls ++ cderivs
--- --                m' = m {decls = (decls m) { functions = funcs }}
-
---             case typeCheckDeclarations (map snd funcs) of
---               Left _ -> return . Just $ createError (modName m) ([],[],[],[],[],[])
---               Right funcs' -> let m' = m {decls = (decls m) { functions = zipWith (\(a,_) f -> (a,f)) funcs funcs' }}
---                              in modify (second $ addModuleEnv m') >> return Nothing
 
 -- | Dado un nombre de módulo, comienza la carga buscado en el archivo
 -- correspondiente al módulo.

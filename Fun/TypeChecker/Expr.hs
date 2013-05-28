@@ -21,8 +21,7 @@ module Fun.TypeChecker.Expr
     , match
     , match2
       -- * Algoritmo de TypeChecking.
-    , checkPreExpr
-    , getType
+--    , checkPreExpr
     , TCState(..)
     , checkWithEnv
     , checkWithFreshEnv
@@ -33,6 +32,9 @@ module Fun.TypeChecker.Expr
     , throwError
     , unifyS
     , modSubst
+    , getFreshTyVar
+    , updAss
+    , getSub
     )
     where
 
@@ -57,7 +59,7 @@ import Control.Monad.Trans.State
 import Control.Applicative((<$>))
 
 -- | Ciertos s&#237;mbolos deben tener un &#250;nico tipo en toda una expresi&#243;n;
--- un contexto lleva la cuenta de todos los tipos que vamos viendo. En
+-- un contexto lleva la cuenta de todos los tipos que vamos viendo.
 
 type CtxSyn s = M.Map s [Type]
     
@@ -66,10 +68,10 @@ type CtxSyn s = M.Map s [Type]
 -- inicialmente tiene los cuantificadores "homog&#233;neos" (por ejemplo,
 -- sumatoria est&#225;, pero forall no est&#225;).
 data TCCtx = TCCtx { vars :: CtxSyn VarName
-               , ops  :: CtxSyn OpName 
-               , cons :: CtxSyn ConName
-               , quants :: CtxSyn QuantName
-               }
+                   , ops  :: CtxSyn OpName 
+                   , cons :: CtxSyn ConName
+                   , quants :: CtxSyn QuantName
+                   }
          deriving Show
 
 -- | El error est&#225; acompa&#241;ado de la expresi&#243;n enfocada donde ocurri&#243;.
@@ -87,6 +89,7 @@ type TyState a = TIMonad a
 type TIMonad a = StateT TCState (Either TCError) a
 
 data TCState = TCState { subst :: TySubst
+                       , funcs :: M.Map VarName [Type]
                        , ctx   :: TCCtx
                        , fTyVar :: Int
                        }
@@ -157,8 +160,14 @@ checkSyn s name getM = gets (getM . ctx) >>= \ctx ->
                          Just ts -> rewriteS (head ts)
 
 -- | Las diferentes instancias de checkSyn.
-checkVar :: Syntactic s => s -> TyState Type
-checkVar v = checkSyn v tRepr vars
+-- checkVar :: -- Syntactic s => s -> TyState Type
+checkVar v = gets (vars . ctx) >>= \ctx ->
+             case M.lookup (varName v) ctx of
+               Nothing -> gets funcs >>= \ass ->
+                          case M.lookup (varName v) ass of
+                            Nothing -> tyerr $ ErrClashTypes v [] -- error "Ahhh"
+                            Just ts -> rewriteS (head ts)
+               Just ts -> rewriteS (head ts)
 checkCon :: Constant -> TyState Type
 checkCon c = checkSyn c conName  cons
 checkOp :: Operator -> TyState Type
@@ -189,6 +198,15 @@ unifyListS (t:t':ts) = unifyS t t' >> unifyListS (t':ts)
 rewriteS :: Type -> TyState Type
 rewriteS t = flip rewrite t <$> getSub
 
+updAss :: M.Map VarName [Type] -> TIMonad ()
+updAss ass = getSub >>= \subst -> 
+             modify (\s -> s { funcs = M.map (map (rewrite subst)) ass})
+
+
+updAss' :: TIMonad ()
+updAss' = getSub >>= \subst -> 
+         modify (\s -> s { funcs = M.map (map (rewrite subst)) (funcs s)})
+
 check :: PreExpr -> TyState Type
 check (Var v) = checkVar v
 check (Con c) = checkCon c 
@@ -205,7 +223,7 @@ check (BinOp op e e') = do te <- check e
                            w <- getFreshTyVar
                            unifyS (te :-> te' :-> w) tOp
                            rewriteS w
-check (App e e') = do te <- check e 
+check (App e e') = do te <- check e
                       te' <- check e' 
                       w <- getFreshTyVar
                       unifyS  te (te' :-> w) 
@@ -273,10 +291,11 @@ check' e = initCtxE e >> check e
 initTCState = TCState { subst = emptySubst
                       , ctx = initCtx
                       , fTyVar = 0
+                      , funcs = M.empty
                       }
 
 -- | Construye un contexto con variables frescas para las variables
--- que no tienen un tipo 
+-- que no tienen un tipo
 mkCtxVar :: PreExpr -> TyState ()
 mkCtxVar e = mapM_ updCtx vs
     where vs = Set.elems $ freeVars e
@@ -327,9 +346,9 @@ setType' :: TCCtx -> PreExpr -> PreExpr
 setType' ctx e = setType v c o e
     where (v,c,o) = mkSubst ctx 
 
--- | Retorna el tipo de una expresi&#243;n bien tipada.
-checkPreExpr :: PreExpr -> Either TCError Type
-checkPreExpr e = either Left (Right . fst) $ runStateT (check' e) initTCState 
+-- -- | Retorna el tipo de una expresi&#243;n bien tipada.
+-- checkPreExpr :: PreExpr -> Either TCError Type
+-- checkPreExpr e = either Left (Right . fst) $ runStateT (check' e) initTCState 
 
 checkWithEnv :: M.Map VarName Type -> PreExpr -> TyState Type
 checkWithEnv env e = initCtxE e >> mapM_ (uncurry extCtxVar) (M.toList env) >> check e
@@ -339,10 +358,7 @@ checkWithFreshEnv ass fun args e = initCtxE e >>
                                    getFreshTyVar >>= \tr ->
                                    extCtxV fun (foldr (:->) tr ts) >>
                                    check e >>= \ty ->
-                                   unifyS tr ty >>
+                                   unifyS tr ty >>                                   
+                                   updAss' >>
                                    rewriteS tr
-
-
-getType :: PreExpr -> Maybe Type
-getType = either (const Nothing) return . checkPreExpr
 

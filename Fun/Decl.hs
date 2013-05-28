@@ -1,4 +1,4 @@
-
+{-# Language NoMonomorphismRestriction #-}
 module Fun.Decl where
 
 import qualified Equ.PreExpr as PE
@@ -12,10 +12,15 @@ import Equ.Theories (createHypothesis,makeExprFromRelation)
 import Data.Text hiding (map,all)
 import Fun.Decl.Error
 import Data.Text (pack,unpack,Text)
+import Control.Lens.Lens
+import Control.Lens
+
 
 -- | Declaraciones en Fun
 data SpecDecl = Spec Variable [Variable] PE.PreExpr
     deriving Show
+
+
 
 instance Eq SpecDecl where
     (Spec f _ _) == (Spec f' _ _) = f == f'
@@ -35,7 +40,38 @@ instance Eq ThmDecl where
     thm == thm' = getNameDecl thm == getNameDecl thm'
 
 data FunDecl = Fun Variable [Variable] PE.PreExpr (Maybe Text) -- Puede tener la verificación o no.
-    deriving Show
+
+
+funDeclName :: Lens FunDecl FunDecl Variable Variable
+funDeclName = lens getFunName setFunName
+    where setFunName :: FunDecl -> Variable -> FunDecl
+          setFunName (Fun _ args e t) f = Fun f args e t
+
+          getFunName :: FunDecl -> Variable
+          getFunName (Fun f _ _ _) = f
+
+funDeclArgs :: Lens FunDecl FunDecl [Variable] [Variable]
+funDeclArgs = lens getFunArgs setFunArgs
+    where setFunArgs :: FunDecl -> [Variable] -> FunDecl
+          setFunArgs (Fun f _ e t) as = Fun f as e t
+
+          getFunArgs :: FunDecl -> [Variable]
+          getFunArgs (Fun _ as _ _) = as
+
+
+funDeclBody :: Lens FunDecl FunDecl PE.PreExpr PE.PreExpr
+funDeclBody = lens getFunBody setFunBody
+    where setFunBody :: FunDecl -> PE.PreExpr -> FunDecl
+          setFunBody (Fun f as _ t) e = Fun f as e t
+
+          getFunBody :: FunDecl -> PE.PreExpr
+          getFunBody (Fun _ _ e _) = e
+
+
+instance Show FunDecl where
+    show (Fun f args e t) = Prelude.unlines [ show f ++ " :: " ++ show (varTy f)
+                                            , show f ++ " " ++ show args ++ " = " ++ show e
+                                            ]
 
 -- POR QUE ESTA INSTANCIA ESTA DEFINIDA ASI??????
 instance Eq FunDecl where
