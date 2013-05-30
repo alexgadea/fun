@@ -1,15 +1,13 @@
 -- | Environment es el conjunto de módulos que se tienen cargados en un momento dado
 --   en Fun. Cada vez que se hace un import desde un módulo, debe referirse a un
 --   módulo que se encuentre en el environment.
-{-# Language DoAndIfThenElse #-}
+{-# Language DoAndIfThenElse,TemplateHaskell #-}
 module Fun.Environment where
 
 import Fun.Module
 import Fun.Module.Graph
 import Fun.Module.Error
 import Fun.Parser 
-import Fun.Parser.Internal
-import Fun.Parser.Module
 import Fun.Decl(FunDecl,ValDecl)
 import Fun.Declarations
 import Fun.Verification
@@ -17,33 +15,28 @@ import Fun.Derivation
 import Fun.TypeChecker
 
 import Data.Either (lefts,rights,partitionEithers)
-import qualified Data.List as L (map,elem,filter,notElem,nub)
+import qualified Data.List as L (map)
 import Data.Text (unpack,pack)
 import Data.Graph.Inductive
-import Data.Graph.Inductive.Query.DFS (reachable)
 import Data.List(find)
-
-import Data.Maybe
-
+import Data.Monoid(mconcat)
 import System.FilePath.Posix
 
-import Control.Applicative ((<$>))
-import Control.Arrow ((***),second)
+import Control.Lens
 import Control.Monad (foldM)
-import Data.Functor.Identity
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.State
 
-import Prelude hiding (catch)
 import qualified Control.Exception as C
-import System.IO
 
 type Environment = [Module]
 
-data StateCM = StateCM { imMGraph   :: ImModuleGraph
-                       , modulesEnv :: Environment
+data StateCM = StateCM { _imMGraph   :: ImModuleGraph
+                       , _modulesEnv :: Environment
                        }
     deriving Show
+
+$(makeLenses ''StateCM)
 
 type CheckModule a = StateT StateCM IO a
 
@@ -52,36 +45,27 @@ initStateCM = StateCM
 
 -- No usar este añadir si se quiere actualizar el módulo.
 addModuleEnv :: Module -> Environment -> Environment
-addModuleEnv m env = if m `elem` env 
-                        then env
-                        else m : env
+addModuleEnv m env = if m `elem` env then env else m : env
 
 -- | Chequea la lista de módulos en el environment.
 checkEnvModules :: CheckModule (Maybe ModuleError)
-checkEnvModules = do
-            st <- get
-            foldM (\may m -> 
-                    case may of
-                        Just merr -> return $ Just merr
-                        Nothing -> checkModule m
-                  ) Nothing $ modulesEnv st
+checkEnvModules = get >>= foldM proceed Nothing . (^. modulesEnv)
+    where proceed so m = maybe (checkModule m) (return . Just) so
 
--- | Chequea una módulo del environment.
+-- | Chequea un módulo del environment.
 checkModule :: Module -> CheckModule (Maybe ModuleError)
 checkModule m = do
-    env <- modulesEnv <$> get
-    imGraph <- imMGraph <$> get
+    env     <- use modulesEnv 
+    imGraph <- use imMGraph
     
     let rImports = reachableImports (modName m) imGraph
-    let mImports = filter (\m -> modName m `elem` rImports) env
+    let mImports = filter ((`elem` rImports) . modName) env
     
-    let mImportedDecls = if null mImports
-                            then Nothing
-                            else Just $ foldr1 concatDeclarations 
-                                      $ map validDecls mImports
+    let mImportedDecls = mconcat$ map validDecls mImports
     
     let invalidSpec = lefts $ checkSpecs (validDecls m) mImportedDecls
     let invalidFuns = lefts $ checkFuns  (validDecls m) mImportedDecls
+
     let invalidVals = lefts $ checkVals  (validDecls m) mImportedDecls
         
     let thmsCheck = checkThm (validDecls m) mImportedDecls
@@ -113,31 +97,26 @@ checkModule m = do
                        , verifications = cverifs
                        , invalidDecls = InvalidDeclsAndVerifs inDeclarations inverifs
                        }
-                funcs = functions . validDecls $ m'
+                funcs = _functions . validDecls $ m'
             in
             case typeCheckDeclarations (map snd funcs) of
                Left e -> liftIO (putStrLn (show e)) >>
                         return (Just $ createError (modName m) ([],[],[],[],[],[]))
-               Right funcs' -> let m'' = m' {validDecls = (validDecls m') { functions = zipWith (\(a,_) f -> (a,f)) funcs funcs' }}
+               Right funcs' -> let m'' = m' {validDecls = (validDecls m') { _functions = zipWith (\(a,_) f -> (a,f)) funcs funcs' }}
                               in updateModuleEnv m'' >> return Nothing
 
         (e1,e2,e3,e4,(e5,_),(e6,_)) -> 
             return . Just $ createError (modName m) (e1,e2,e3,e4,e5,e6)
     where
-        updateValidDecls vd ind nf = filterVD {functions = filterVDFuncs ++ nf}
-            where 
-                filterVDFuncs = functions $ filterVD 
-                filterVD = filterValidDecls vd ind
-        updateModuleEnv :: Module -> CheckModule (Maybe ModuleError)
-        updateModuleEnv m = do
-                        modify (\s -> s { modulesEnv = map update $ modulesEnv s })
-                        return Nothing
-            where
-                update :: Module -> Module
-                update m' = if m == m' then m else m'
-                
-        imThms imds = maybe [] (map snd . theorems) imds
+        imThms imds = bareThms imds
 
+
+updateValidDecls vd ind nf = over functions (++ nf) $ filterValidDecls vd ind 
+
+updateModuleEnv :: Module -> CheckModule ()
+updateModuleEnv m = modulesEnv %= map update
+    where update :: Module -> Module
+          update m' = if m == m' then m else m'
 
 -- | Dado un nombre de módulo, comienza la carga buscado en el archivo
 -- correspondiente al módulo.
@@ -148,7 +127,7 @@ loadMainModule path modN = do
               (\m -> do
                 let initCM = initStateCM (insModuleImports m emptyImMG) [m]
                 (mErr,st) <- runStateT (loadAndCheck m) initCM
-                maybe (return $ Right $ modulesEnv st) (return . Left) mErr
+                maybe (return $ Right $ (^. modulesEnv) st) (return . Left) mErr
               ) mParsedM
     where loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
           loadAndCheck m = loadEnv path m >>= maybe checkEnvModules (return . Just)
@@ -170,24 +149,21 @@ loadEnv path m = foldM (\ may (Import mn) ->
         loadEnv' m = updateEnv m >> checkCycle >>= maybe (loadEnv path m) (return . Just)
         checkCycle :: CheckModule (Maybe ModuleError)
         checkCycle = do
-                    st <- get
-                    let cycleList = filter ((>1) . length) . scc $ imMGraph st
+                    graph <- use imMGraph
+                    let cycleList = filter ((>1) . length) . scc $ graph
                     if cycleList == []
                        then return Nothing
                        else return . Just $ ModuleCycleImport $ map (pack.show) $ head cycleList
-        updateEnv :: Module -> CheckModule (Maybe ModuleError)
-        updateEnv m = do
-                    modify (\s -> s { imMGraph = insModuleImports m $ imMGraph s
-                                    , modulesEnv = addModuleEnv m $ modulesEnv s
-                                    })
-                    return Nothing
+        updateEnv :: Module -> CheckModule ()
+        updateEnv m = imMGraph   %= insModuleImports m >> 
+                      modulesEnv %= addModuleEnv m
 
 -- Queries for environments
 getFuncs :: Environment -> [FunDecl]
-getFuncs = concatMap (map snd . functions . validDecls)
+getFuncs = concatMap (bare functions . validDecls)
 
 getVals :: Environment -> [ValDecl]
-getVals = concatMap (map snd . vals . validDecls)
+getVals = concatMap (bare vals . validDecls)
 
 -- | Parsea una módulo en base a una dirección de archivo.
 parseFromFileModule :: TextFilePath -> IO (Either ModuleError Module)
@@ -212,7 +188,7 @@ loadMainModuleFromFile fp = do
               (\m -> do
                 let initCM = initStateCM (insModuleImports m emptyImMG) [m]
                 (mErr,st) <- runStateT (loadAndCheck m) initCM
-                maybe (return $ Right (modulesEnv st,modName m)) (return . Left) mErr
+                maybe (return $ Right (st ^. modulesEnv,modName m)) (return . Left) mErr
               ) mParsedM
     where
         loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
@@ -220,20 +196,6 @@ loadMainModuleFromFile fp = do
             let folder = (takeDirectory (unpack fp) ++ [pathSeparator]) in
                     loadEnv folder m >>= maybe checkEnvModules (return . Just)
 
--- -- | Parsea un módulo desde una string.
--- loadMainModuleFromString :: String -> IO (Either ModuleError (Environment,ModName))
--- loadMainModuleFromString s = do
---        let mParsedM = parseFromStringModule s
---        either (return . Left . ModuleParseError (pack "")) 
---               (\m -> do
---                 let initCM = initStateCM (insModuleImports m emptyImMG) [m]
---                 (mErr,st) <- runStateT (loadAndCheck m) initCM
---                 maybe (return $ Right (modulesEnv st,modName m)) (return . Left) mErr
---               ) mParsedM
---     where
---         loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
---         loadAndCheck m = loadEnv m >>= maybe checkEnvModules (return . Just)
-
 getModule :: Environment -> ModName -> Maybe Module
-getModule env mname = find (\m -> (modName m) == mname) env
+getModule env mname = find ((== mname) . modName) env
         

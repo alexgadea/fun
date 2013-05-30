@@ -21,6 +21,21 @@ data SpecDecl = Spec Variable [Variable] PE.PreExpr
     deriving Show
 
 
+specName :: Lens SpecDecl SpecDecl Variable Variable
+specName = lens get set
+    where get (Spec f _ _) = f
+          set (Spec _ as spec) f = Spec f as spec
+
+specArgs :: Lens SpecDecl SpecDecl [Variable] [Variable]
+specArgs = lens get set
+    where get (Spec _ as _) = as
+          set (Spec f _ spec) as = Spec f as spec
+
+specSpec :: Lens SpecDecl SpecDecl PE.PreExpr PE.PreExpr
+specSpec = lens get set
+    where get (Spec _ _ spec) = spec
+          set (Spec f as _) spec = Spec f as spec
+
 
 instance Eq SpecDecl where
     (Spec f _ _) == (Spec f' _ _) = f == f'
@@ -79,6 +94,16 @@ instance Eq FunDecl where
 
 data ValDecl = Val Variable PE.PreExpr
     deriving Show
+
+valVar :: Lens ValDecl ValDecl Variable Variable
+valVar = lens get set
+    where get (Val v _) = v
+          set (Val _ e) v = Val v e
+
+valExp :: Lens ValDecl ValDecl PE.PreExpr PE.PreExpr
+valExp = lens get set
+    where get (Val _ e) = e
+          set (Val v _) e = Val v e
     
 instance Eq ValDecl where
     (Val v _) == (Val v' _) = v == v'

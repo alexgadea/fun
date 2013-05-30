@@ -138,7 +138,7 @@ parseSF ecnstr modName = getParserState >>= \state ->
                                   , moduleName = modName
                                 }
             modifyState (\st -> 
-                    st {pDecls = envAddFun (pDecls st) (declPos,cnstr fun vs e mname)}) 
+                    st {pDecls = envAddFun  (declPos,cnstr fun vs e mname) (pDecls st)}) 
         parseTheoName :: ParserD (Maybe Text)
         parseTheoName = Just <$> (keywordVerified >> keywordFrom >> parseName)
         parseS :: Variable -> S -> [Variable] -> SourcePos -> ParserD ()
@@ -151,7 +151,7 @@ parseSF ecnstr modName = getParserState >>= \state ->
                                   , moduleName = modName
                             }
             modifyState (\st -> 
-                    st {pDecls = envAddSpec (pDecls st) (declPos,cnstr fun vs e)})
+                    st {pDecls = envAddSpec  (declPos,cnstr fun vs e) (pDecls st)})
         parseFunArgs :: ParserD [Variable]
         parseFunArgs = manyTill parseVar (try $ string defSymbol)
 
@@ -201,7 +201,7 @@ parseThm modName = do
     -- Este chequeo deberia ir en el chequeo de módulos y no acá.
     if proofExpr /= Expr e
        then fail "La expresión de la declaración del teorema no coincide con la prueba"
-       else modifyState (\st -> st { pDecls = envAddTheorem (pDecls st) (declPos,declThm) })
+       else modifyState (\st -> st { pDecls = envAddTheorem  (declPos,declThm) (pDecls st) })
 
 -- | Agrega un teorema parseado al estado de parseo de teoremas.
 addTheorem :: EquP.PProofState -> Text -> Proof -> EquP.PProofState
@@ -232,7 +232,7 @@ parseVal modName = parseVar >>= \v -> getParserState >>= \state ->
                 keywordEnd >>
                 getParserState >>= \state ->
                 (\declPos -> modifyState (\st -> 
-                    st {pDecls = envAddVal (pDecls st) (declPos,Val v e)})
+                    st {pDecls = envAddVal  (declPos,Val v e) (pDecls st)})
                     ) (DeclPos beginPos (statePos state) modName)
         parseVarWithType :: Variable -> SourcePos -> Text -> ParserD ()
         parseVarWithType v beginPos modName = try $
@@ -259,8 +259,8 @@ parseProp modName = do
         let endPos = statePos state
         let declPos = DeclPos beginPos endPos modName
         modifyState (\st -> st {pDecls = envAddProp 
-                                            (pDecls st) 
                                             (declPos,Prop name e)
+                                            (pDecls st) 
                                 })
 
 -- | Parser de derivaciones.
@@ -278,8 +278,8 @@ parseDer modName = do
         let endPos = statePos state
         let declPos = DeclPos beginPos endPos modName
         modifyState (\st -> st {pDecls = envAddDeriv 
-                                          (pDecls st) 
                                           (declPos,Deriv name var $ reverse fps)
+                                          (pDecls st) 
                                })
     where
         parseCases :: ParserD (PE.Focus, Proof)

@@ -30,6 +30,7 @@ import qualified Data.Set as Set
 import Data.Either (rights,lefts)
 import Data.Maybe (fromJust)
 
+import Control.Lens
 import System.IO.Unsafe (unsafePerformIO)
 
 
@@ -40,9 +41,9 @@ import System.IO.Unsafe (unsafePerformIO)
 createDerivations:: Declarations -> [EDeriv]
 createDerivations decls =
     -- Obtenemos las declaraciones parseadas
-    let pDerivs = derivs decls in
-        let pSpecs = L.map snd $ specs decls in
-            let pFuncs = L.map snd $ functions decls in
+    let pDerivs =  decls ^. derivs in
+        let pSpecs = L.map snd $  decls ^. specs in
+            let pFuncs = L.map snd $ decls ^. functions  in
                 foldl (createDeriv pSpecs pFuncs) [] pDerivs
     
     where 
@@ -77,7 +78,7 @@ createDerivations decls =
 
 -- | Funcion que dada una derivacion dice si es válida o no. Esto es solo para las derivaciones
 --   por recursión. Si luego se implementa otro tipo de derivación, entonces debería diferenciarse
-checkDerivation :: Declarations -> Maybe Declarations -> [ThmDecl] -> 
+checkDerivation :: Declarations -> Declarations -> [ThmDecl] -> 
                    EDeriv -> EDeriv' (DeclPos,FunDecl)
 checkDerivation decls mImportDecls thms d = 
     case d of

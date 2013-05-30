@@ -24,14 +24,16 @@ import Data.List as L (map, find)
 import Data.Either (rights)
 import Data.Maybe (fromJust,catMaybes)
 
+import Control.Lens
+
 -- | Crea una verificación, esto es, una especificación de una función,
 -- la función y una prueba de corrección de que la función se derivo en
 -- base a la especificación.
-createVerifications:: Declarations -> Maybe Declarations -> [Verification]
+createVerifications:: Declarations -> Declarations -> [Verification]
 createVerifications decls imds = do
-                let vSpecs = map snd $ specs decls
-                let vFuns = map snd $ functions decls
-                let vThm = map snd $ theorems decls
+                let vSpecs = bare specs decls
+                let vFuns = bare functions decls
+                let vThm = bare theorems decls
                 let der = createVer vSpecs vFuns vThm
                 catMaybes der
     where
