@@ -16,12 +16,12 @@ import Equ.IndType
 
 import qualified Data.List as L
 import qualified Data.Set as S 
-import Data.Text hiding (map,concatMap,unlines,reverse)
+import Data.Text hiding (map,concatMap,unlines,reverse,foldl)
 import Data.Either (partitionEithers)
 import Data.Maybe (fromJust,fromMaybe,mapMaybe)
 import Data.Monoid
 import Text.Parsec.Pos (newPos)
-import Control.Arrow(second)
+import Control.Arrow(second,(&&&))
 
 import Control.Monad.Trans.State
 import Control.Lens
@@ -163,14 +163,20 @@ checkDecls :: (Decl d) =>
 checkDecls decl ds imds checks = over traverse (\ann -> okDecl ann $ (checks declsWithImports) ann) (ds ^. decl)
     where declsWithImports = ds <> imds
 
+-- | Chequeo de declaración: chequeamos que no esté duplicada, además
+-- de algún chequeo propio de la declaración.
 checkDecl :: (Eq d,Decl d,Duplicated d) => (d -> Declarations -> [DeclError]) -> 
               Declarations -> Annot d -> [DeclError]
 checkDecl chk decls ann = mconcat [ chk (ann ^. _2) , checkDoubleDef ann ] decls
 
+-- | Chequeo de especificaciones; el único control que hacemos es que
+-- todas las varibles estén declaradas.
 checkSpecs :: Declarations -> Declarations -> 
               [Either (ErrInDecl SpecDecl) SpecDecl]
 checkSpecs ds imds = checkDecls specs ds imds $ checkDecl checkDefVar
 
+-- | Chequeo de funciones; además del chequeo de variables,
+-- verificamos que el cuerpo sea un programa.
 checkFuns :: Declarations ->  Declarations -> 
              [Either (ErrInDecl FunDecl) FunDecl]
 checkFuns ds imds = checkDecls functions ds imds $ \d -> mconcat [checkDecl checkDefVar d, chkPrg]
@@ -179,56 +185,47 @@ checkFuns ds imds = checkDecls functions ds imds $ \d -> mconcat [checkDecl chec
         chkPrg (checkIsPrg . (^. _2) -> False) = [InvalidPrgDeclaration]
         chkPrg _  = []
         
-
+-- | Chequeo de teoremas; además del chequeo de nombres duplicados,
+-- verificamos que la prueba sea correcta.
 checkThm :: Declarations -> Declarations ->
             [Either (ErrInDecl ThmDecl) ThmDecl]
-checkThm ds imds = L.foldl chkThm [] thmDefs
-    where
-        chkThm prevs (dPos,thm@(Thm p)) = let (errThms,rThms) = partitionEithers prevs
-                                              proofWithDecls = addDeclHypothesis ds (rThms ++ imThms) imds (thProof p)
-                                          in case (checkDoubleDef (dPos,thm) dswi, validateProof proofWithDecls) of
-                                               ([],Right _) -> Right thm : prevs
-                                               (dErrs,eiErrs) -> (Left $ ErrInDecl dPos (dErrs++makeError eiErrs) thm) : prevs
-                
-        imThms :: [ThmDecl]
-        imThms = bareThms imds 
-        -- Grupo de declaraciones de un módulos mas las de sus imports
-        dswi :: Declarations 
-        dswi = ds <> imds
-        thmDefs :: [Annot ThmDecl]
-        thmDefs = reverse $ ds ^. theorems
-        makeError :: Either ProofError Proof -> [DeclError]
-        makeError = either (\p -> [InvalidProofForThm p]) (const [])
+checkThm ds imds = zip' $ foldl chkThm ([],[]) thmDefs
+    where chkThm (errThms,okThms) decl@(pos,thm) = 
+              case checkDoubleDef decl dswi of
+                [] -> case validateProof (prfWithDecls okThms thm) of
+                        Right _ -> (errThms, thm : okThms)
+                        Left err  -> (ErrInDecl pos [InvalidProofForThm err] thm :errThms,okThms)
+                errs -> (ErrInDecl pos errs thm : errThms, okThms)
 
-hypListFromDeclarations :: Declarations -> [ThmDecl] -> [Hypothesis]
-hypListFromDeclarations decls thms = 
-    let (hSpecs,hFuns,hProps,hVals) = 
-          (hyps _specs decls,hyps _functions decls,hyps _vals decls, hyps _props decls) in
-          
-        L.concat [hSpecs,hFuns,hProps,hVals,hThms]
-    
-    where hyps :: Decl d => (Declarations -> [(a,d)]) -> Declarations -> [Hypothesis]
-          hyps f ds = mapMaybe (createHypDecl . snd) $ f ds
-          hThms :: [Hypothesis]
-          hThms = mapMaybe createHypDecl thms
+          prfWithDecls thms (Thm p) = addDeclHypothesis ds (thms ++ bareThms imds) imds (thProof p)
+        -- Grupo de declaraciones de un módulos mas las de sus imports
+          dswi :: Declarations 
+          dswi = ds <> imds
+          thmDefs :: [Annot ThmDecl]
+          thmDefs = reverse $ ds ^. theorems
+          zip' (errs,oks) = map Left errs ++ map Right oks
+
+hypListFromDecls :: Declarations -> [ThmDecl] -> [Hypothesis]
+hypListFromDecls decls thms = mapMaybe createHypDecl thms <>
+                              mconcat [ hyps _specs
+                                      , hyps _functions
+                                      , hyps _vals
+                                      , hyps _props] decls 
+                              
+    where hyps :: Decl d => (Declarations -> [Annot d]) -> Declarations -> [Hypothesis]
+          hyps f decls = mapMaybe (createHypDecl . snd) $ f decls
         
 -- Esta funcion agrega a una prueba las hipótesis correspondientes a todas las declaraciones
 -- definidas y los teoremas validos.
 addDeclHypothesis :: Declarations -> [ThmDecl] -> Declarations -> Proof -> Proof
-addDeclHypothesis decls validThms mImportDecls pr =
-    addDeclsHyps pr
-    
+addDeclHypothesis decls validThms mImportDecls pr = foldl addHyps pr $ hypListFromDecls dswi validThms
+
     where imThms :: [ThmDecl]
           imThms = bareThms mImportDecls
-          addDeclsHyps :: Proof -> Proof
-          addDeclsHyps p = 
-            L.foldl (\p hyp -> fromJust $ addDeclsHyp p hyp) 
-                    p (hypListFromDeclarations dswi validThms)
+          addHyps :: Proof -> Hypothesis -> Proof
+          addHyps p hyp = fromJust $ addDeclsHyp p hyp
           addDeclsHyp :: Proof -> Hypothesis -> Maybe Proof
-          addDeclsHyp p hyp = do
-                    ctx <- getCtx p
-                    let updateCtx = addHypothesis' hyp ctx
-                    setCtx updateCtx p
+          addDeclsHyp p hyp = getCtx p >>= \ctx -> setCtx (addHypothesis' hyp ctx) p
           dswi :: Declarations 
           dswi = decls <> mImportDecls
 
@@ -269,8 +266,8 @@ checkDoubleDef (dPos,decl) = mconcat [ checkDoubleDef' . (^. vals)
         checkDoubleDef' :: (Decl d, Eq d) => [Annot d] -> [DeclError]
         checkDoubleDef' decls = concatMap mErr decls
 
-initTheorems :: [Theorem]
-initTheorems = concatMap theorytheorems [arithTheory,listTheory,folTheory]
+initThms :: [Theorem]
+initThms = concatMap theorytheorems [arithTheory,listTheory,folTheory]
 
 mapIndTypes :: [(Type' TyVarName, IndType)]
 mapIndTypes = [ (TyAtom ATyNat,natural)
@@ -289,15 +286,8 @@ emptyInDeclarations =
                          }
 
 initDeclarations :: Declarations
-initDeclarations = Declarations {
-                    _functions = []
-                  , _specs = []
-                  , _theorems = map (\t -> (initDeclPos,Thm t)) initTheorems
-                  , _props = []
-                  , _vals = []
-                  , _derivs = []
-                  , _indTypes = mapIndTypes
-                }
+initDeclarations = flip execState mempty $ do theorems .= map (const initDeclPos &&& Thm) initThms;
+                                              indTypes .= mapIndTypes
     where
         initDeclPos = DeclPos initPosThms initPosThms (pack "")
         initPosThms = newPos "TeoremasIniciales" 0 0
