@@ -20,6 +20,7 @@ data ModuleError = ModuleParseError TextFilePath ParseError
                     , mErrThm   :: [ErrInDecl ThmDecl]
                     , mErrVer   :: [ErrInVerif Verification]
                     , mErrDeriv :: [ErrInDeriv DerivDecl]
+                    , mErrTC    :: String
                     }
 
 instance Show ModuleError where
@@ -40,6 +41,7 @@ instance Show ModuleError where
                      , "Thms con error: " ++  show (mErrThm m)
                      , "Vers con error: " ++  show (mErrVer m)
                      , "Ders con error : " ++ show (mErrDeriv m)
+                     , "Errores en el type-checking : " ++ mErrTC m
                      , "===================================="
                      ]
 
@@ -54,7 +56,7 @@ instance Eq ModuleError where
 
 createError :: Text -> ([ErrInDecl SpecDecl], [ErrInDecl FunDecl], 
                 [ErrInDecl ValDecl], [ErrInDecl ThmDecl], 
-                [ErrInVerif Verification],[ErrInDeriv DerivDecl])  ->
+                [ErrInVerif Verification],[ErrInDeriv DerivDecl],String)  ->
                 ModuleError
-createError name (errSpecs, errFuns, errVals, errThm, errVer,errDeriv) = 
-                ModuleError name errSpecs errFuns errVals errThm errVer errDeriv
+createError name (errSpecs, errFuns, errVals, errThm, errVer,errDeriv,tcErr) = 
+                ModuleError name errSpecs errFuns errVals errThm errVer errDeriv tcErr

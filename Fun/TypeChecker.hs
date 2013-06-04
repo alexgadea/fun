@@ -4,88 +4,154 @@ module Fun.TypeChecker where
 
 import Fun.TypeChecker.CallGraph
 import Fun.TypeChecker.Expr
+import Fun.TypeChecker.Proof
+import Fun.Module
+import Fun.Declarations
 import Fun.Decl
--- import Fun.Environment
 
 import Equ.PreExpr
+import Equ.Proof.Proof(Theorem(..))
 import Equ.Syntax(VarName)
 import Equ.Types
+import Equ.Expr (getPreExpr)
+import Equ.Proof.Proof(updThmExp)
+import Equ.TypeChecker.Unification
 
 import Data.Map (Map,fromList,delete,empty)
 import qualified Data.Map as M
 import Control.Monad.Trans.State
 import Control.Monad(replicateM)
 import Data.Foldable (foldrM)
-
+import Control.Monad(when)
+import Data.Maybe(isNothing)
 import Control.Lens hiding (rewrite)
+import Control.Arrow(second)
 
 type Ass = Map VarName [Type]
 
-checkDecl :: Variable -> [Variable] -> PreExpr -> TIMonad ()
-checkDecl fun args body = gets funcs >>= \ass -> 
-                          case M.lookup (varName fun) ass of
-                                Just (t:_) -> checkTypedDecl ass fun t args body
-                                _ -> throwError $ "Función que no está en la lista de suposiciones" 
+tcCheckDecl :: Variable -> [Variable] -> PreExpr -> TIMonad (VarName,PreExpr)
+tcCheckDecl fun args body = checkTypedDecl fun args body
+
+checkSpecDecl :: SpecDecl -> TIMonad (VarName,PreExpr)
+checkSpecDecl (Spec fun args body) = tcCheckDecl fun args body 
+
+checkFunDecl :: FunDecl -> TIMonad (VarName,PreExpr)
+checkFunDecl (Fun fun args body _) = tcCheckDecl fun args body 
+
+checkVal :: Annot ValDecl -> TIMonad (Annot ValDecl)
+checkVal (pos,(Val var expr)) = checkWithEnv M.empty expr >>= \t ->
+                          getType (varTy var) >>= \t' ->
+                          unifyS t t' >>
+                          rewriteS t >>= \t'' ->
+                          updAss' >> 
+                          setTypeS expr >>= \e -> return $ (pos,Val (setVarType t'' var) e)
+    where getType TyUnknown = getFreshTyVar
+          getType t = return t
+
+tcCheckProp :: PropDecl -> TIMonad ()
+tcCheckProp (Prop _ expr) = checkWithEnv M.empty expr >>= \t -> 
+                            unifyS t (TyAtom ATyBool) >> 
+                            updAss'
+
+tcCheckThm :: Annot ThmDecl -> TIMonad (Annot ThmDecl)
+tcCheckThm (pos,(Thm t)) = mkCtxVar (getPreExpr . thExpr $ t) >>
+                           checkWithEnv M.empty (getPreExpr . thExpr $ t) >>= \ty ->
+                           unifyS ty (TyAtom ATyBool) >>
+                           setTypeS (getPreExpr . thExpr $ t) >>= \e ->
+                           chkProof (thProof t) >>
+                           return (pos,Thm (updThmExp e t))
+
+checkDeriv :: DerivDecl -> TIMonad ()
+checkDeriv (Deriv f n prfs) = return ()
+
+checkTypedDecl :: Variable -> [Variable] -> PreExpr -> TIMonad (VarName,PreExpr)
+checkTypedDecl fun args body = do ass <- use funcs
+                                  let t = M.lookup (varName fun) ass 
+                                  when (isNothing t) (throwError $ "Función que no está en la lista de suposiciones")
+                                  let (Just (ty:_)) = t
+                                  if arity ty /= length args
+                                  then throwError $ "Unexpected number of arguments: " ++ show ty ++ " <> " ++ show args
+                                  else do 
+                                    let argsTy = argsTypes ty
+                                    let varsTy = fromList $ (varName fun,ty): zipWith (\v t -> (varName v,t)) args argsTy
+                                    ty' <- checkWithEnv varsTy body
+                                    s' <- unifyS ty (exponential ty' argsTy)
+                                    body' <- setTypeS body
+                                    localState args
+                                    ass' <- use (ctx . vars)
+                                    updAss (M.union ass ass')
+                                    return (varName fun,body')
+
+addAssumption :: (Variable,[Variable]) -> TIMonad ()
+addAssumption (f,args) = use funcs >>= \ass ->
+                         if varTy f /= TyUnknown
+                         then updAss $ M.insert (varName f) [varTy f] ass
+                         else replicateM (length args) getFreshTyVar >>= \ts ->
+                              getFreshTyVar >>= \tr ->
+                              updAss $ M.insert (varName f) [exponential tr ts] ass
+
+tcCheckModule :: Module -> TIMonad Module
+tcCheckModule m = do let decls = m ^. validDecls
+                     let fs   = bare functions decls
+                     let sps  = bare specs decls
+                     let vls  = decls ^. vals 
+                     let thms = decls ^. theorems
+                     let prps = bare props decls
+                     let env  = map (\f -> (f ^. funDeclName,f ^. funDeclArgs)) fs
+                             ++ map (\f -> (f ^. specName,f ^. specArgs)) sps
+
+                     mapM_ addAssumption env
+
+                     fbds <- mapM checkFunDecl fs
+                     sbds <- mapM checkSpecDecl sps
+                     vls' <- mapM checkVal vls
+                     thms' <- mapM tcCheckThm thms
+                     mapM_ tcCheckProp prps
+
+                     env <- use funcs 
+
+                     return $ execState (do (validDecls . functions) %= updFunTypes fbds env ;
+                                            (validDecls . specs) %= updSpecTypes sbds env    ;
+                                            (validDecls . vals)  .= vls'                     ;
+                                            validDecls . theorems .= thms') m
+
+updFunTypes :: [(VarName,PreExpr)] -> Ass -> [Annot FunDecl] -> [Annot FunDecl]
+updFunTypes bds ass fs = map updDecl fs
+    where updDecl f = maybe f (flip (changeTypeDecl bd) f . head) $ M.lookup fname ass
+              where fname = f ^. _2 ^. funDeclName ^. to varName
+                    bd = lookup fname bds
+
+updSpecTypes :: [(VarName,PreExpr)] -> Ass -> [Annot SpecDecl] -> [Annot SpecDecl]
+updSpecTypes bds ass fs = map updDecl fs
+    where updDecl f = maybe f (flip (changeSpecType bd) f . head) $ M.lookup fname ass
+              where fname = f ^. _2 ^. specName ^. to varName
+                    bd = lookup fname bds
 
 
-checkSpecDecl :: SpecDecl -> TIMonad ()
-checkSpecDecl (Spec fun args body) = checkDecl fun args body
+setVarType :: Type -> Variable -> Variable
+setVarType t v = v { varTy = t}
 
-checkFunDecl :: FunDecl -> TIMonad ()
-checkFunDecl (Fun fun args body _) = checkDecl fun args body
+changeTypeDecl :: Maybe PreExpr -> Type -> Annot FunDecl -> Annot FunDecl
+changeTypeDecl e ty = second $ (funDeclName %~ setVarType ty) . 
+                                 (funDeclArgs %~ (zipWith setVarType (argsTypes ty))) .
+                                 (funDeclBody %~ maybe id (\x -> const x) e)
 
-checkTypedDecl :: Ass -> Variable -> Type -> [Variable] -> PreExpr -> TIMonad ()
-checkTypedDecl ass fun ty args body = if arity ty /= length args
-                                      then throwError $ "Unexpected number of arguments: " ++ show ty ++ " <> " ++ show args
-                                      else do 
-                                       let argsTy = argsTypes ty
-                                       let varsTy = fromList $ (varName fun,ty): zipWith (\v t -> (varName v,t)) args argsTy 
-                                       ty' <- checkWithEnv varsTy body
-                                       s' <- unifyS ty (exponential ty' argsTy)
-                                       localState args
-                                       ass' <- gets (vars . ctx)
-                                       updAss $ updateAss s' (M.union ass ass')
+changeSpecType :: Maybe PreExpr -> Type -> Annot SpecDecl -> Annot SpecDecl
+changeSpecType e ty = second $ (specName %~ setVarType ty) .
+                                 (specArgs %~ (zipWith setVarType (argsTypes ty))) .
+                                 (specSpec %~ maybe id (\x -> const x) e)
 
-checkBlock ::  [FunDecl] -> TIMonad ()
-checkBlock fs = gets funcs >>= \ass -> 
-                foldrM addAssumption ass fs >>= \ass' ->
-                updAss ass' >>
-                mapM_ checkFunDecl fs
-
-    where addAssumption :: FunDecl -> Ass -> TIMonad Ass
-          addAssumption f ass = let fname = f ^. funDeclName
-                                in if varTy fname /= TyUnknown
-                                   then return $ M.insert (varName fname) [varTy fname] ass
-                                   else let args = f ^. funDeclArgs
-                                        in replicateM (length args) getFreshTyVar >>= \ts ->
-                                           getFreshTyVar >>= \tr ->
-                                           return $ M.insert (varName fname) [exponential tr ts] ass
-
-tcheckModule :: [FunDecl] -> TIMonad ()
-tcheckModule env = mapM_ checkBlock . reverse . mutualBlocks $ env
-
-
-updateTypes :: [FunDecl] -> Ass -> [FunDecl]
-updateTypes fs ass = map updDecl fs
-    where updDecl f = maybe f (flip changeTypeDecl f . head) $ M.lookup (f ^. funDeclName ^. to varName) ass
-                                                                    
-
-changeTypeDecl :: Type -> FunDecl -> FunDecl
-changeTypeDecl ty = (funDeclName %~ setVarType ty) . (funDeclArgs %~ (zipWith setVarType (argsTypes ty)))
-    where setVarType t v = v { varTy = t}
 
 withoutLocal :: Ass -> [Variable] -> Ass
 withoutLocal = foldr (delete . varName)
 
 localState :: [Variable] -> TIMonad ()
-localState args = modify (\st -> st { ctx = (ctx st) {vars = withoutLocal (vars (ctx st)) args} })
+localState args = ctx . vars %= flip withoutLocal args
 
-typeCheckDeclarations :: [FunDecl] -> Either [TCError] [FunDecl]
-typeCheckDeclarations env = case execStateT (tcheckModule (reverse env)) (TCState empty empty initCtx 0) of
-                              Left err -> Left [err]
-                              Right s ->  Right $ updateTypes env (funcs s)
+typeCheckDeclarations :: Module -> Either String Module
+typeCheckDeclarations m = case runStateT (tcCheckModule m) (TCState empty empty initCtx 0) of
+                              Left (TCError err) -> Left $ err
+                              Right (m',_) ->  Right m' -- updateTypes env (s ^. funcs)
 
 updateAss :: TySubst -> Ass -> Ass
 updateAss s = M.map (map (rewrite s))
-
-

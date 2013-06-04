@@ -24,6 +24,7 @@ import System.FilePath.Posix
 
 import Control.Lens
 import Control.Monad (foldM)
+import Control.Arrow
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.State
 
@@ -58,63 +59,53 @@ checkModule m = do
     env     <- use modulesEnv 
     imGraph <- use imMGraph
     
-    let rImports = reachableImports (modName m) imGraph
-    let mImports = filter ((`elem` rImports) . modName) env
+    let rImports = reachableImports (m ^. modName) imGraph
+    let mImports = filter ((`elem` rImports) . (^. modName)) env
     
-    let mImportedDecls = mconcat$ map validDecls mImports
+    let mImportedDecls = mconcat $ map (^. validDecls) mImports
     
-    let invalidSpec = lefts $ checkSpecs (validDecls m) mImportedDecls
-    let invalidFuns = lefts $ checkFuns  (validDecls m) mImportedDecls
+    let invalidSpec = lefts $ checkSpecs (m ^. validDecls ) mImportedDecls
+    let invalidFuns = lefts $ checkFuns  (m ^. validDecls) mImportedDecls
 
-    let invalidVals = lefts $ checkVals  (validDecls m) mImportedDecls
-        
-    let thmsCheck = checkThm (validDecls m) mImportedDecls
+    let invalidVals = lefts $ checkVals  (m ^. validDecls) mImportedDecls
+
+    -- hacer TC
+
+    let tcres = typeCheckDeclarations m
+
+    let thmsCheck = checkThm (m ^. validDecls) mImportedDecls
     let invalidThm  = lefts thmsCheck
     -- buscamos las derivaciones. Si hay derivaciones sin especificación, o
     -- derivaciones repetidas, entonces la lista eDerivs tendrá errores de derivación.
-    let eDerivs = createDerivations (validDecls m)
+    let eDerivs = createDerivations (m ^. validDecls)
         
     
-    let validThms = (rights thmsCheck) ++ (imThms mImportedDecls)
+    let validThms = rights thmsCheck ++ bareThms mImportedDecls
     let checkedDerivs = partitionEithers $ 
-             L.map (checkDerivation (validDecls m) mImportedDecls validThms) eDerivs
+             L.map (checkDerivation (m ^. validDecls) mImportedDecls validThms) eDerivs
     
-    let eVerifs = createVerifications (validDecls m) mImportedDecls
+    let eVerifs = createVerifications (m ^. validDecls) mImportedDecls
     let checkedVerifs = partitionEithers $ L.map checkVerification eVerifs
     
-    let inDeclarations = InvalidDeclarations [] [] 
-                                             invalidThm 
-                                             [] [] 
-                                             (fst checkedDerivs)
+    let inDeclarations = InvalidDeclarations [] [] invalidThm [] [] (fst checkedDerivs)
     
-    case (invalidSpec, invalidFuns, invalidVals, invalidThm, checkedVerifs,checkedDerivs) of
-        ([],[],[],_,(inverifs,cverifs),(_,cderivs)) ->
+    case (invalidSpec, invalidFuns, invalidVals, invalidThm, checkedVerifs,checkedDerivs,tcres) of
+        ([],[],[],_,(inverifs,cverifs),(_,cderivs),Right m') ->
             -- Agregamos al modulo las definiciones de funciones derivadas
-            -- let m' = m { decls = (decls m) {functions = functions (decls m) ++ cderivs}
-            --            , verifications = cverifs
-            --            }
-            let m' = m { validDecls = updateValidDecls (validDecls m) inDeclarations cderivs
-                       , verifications = cverifs
-                       , invalidDecls = InvalidDeclsAndVerifs inDeclarations inverifs
-                       }
-                funcs = _functions . validDecls $ m'
-            in
-            case typeCheckDeclarations (map snd funcs) of
-               Left e -> liftIO (putStrLn (show e)) >>
-                        return (Just $ createError (modName m) ([],[],[],[],[],[]))
-               Right funcs' -> let m'' = m' {validDecls = (validDecls m') { _functions = zipWith (\(a,_) f -> (a,f)) funcs funcs' }}
-                              in updateModuleEnv m'' >> return Nothing
+            let m'' = execState (do validDecls %= updateValidDecls inDeclarations cderivs;
+                                    verifications .= cverifs;
+                                    invalidDecls .= InvalidDeclsAndVerifs inDeclarations inverifs) m'
+            in updateModuleEnv m''
 
-        (e1,e2,e3,e4,(e5,_),(e6,_)) -> 
-            return . Just $ createError (modName m) (e1,e2,e3,e4,e5,e6)
-    where
-        imThms imds = bareThms imds
+        ([],[],[],_,(inverifs,cverifs),(_,cderivs),Left err) -> return . Just $ createError (m ^. modName) ([],[],[],[],inverifs,[],err)
+        (e1,e2,e3,e4,(e5,_),(e6,_),Left e7) -> return . Just $ createError (m ^. modName) (e1,e2,e3,e4,e5,e6,e7)
+        (e1,e2,e3,e4,(e5,_),(e6,_),Right _) -> return . Just $ createError (m ^. modName) (e1,e2,e3,e4,e5,e6,[])
 
 
-updateValidDecls vd ind nf = over functions (++ nf) $ filterValidDecls vd ind 
+updateValidDecls ind nf vd = over functions (++ nf) $ filterValidDecls vd ind 
 
-updateModuleEnv :: Module -> CheckModule ()
-updateModuleEnv m = modulesEnv %= map update
+updateModuleEnv :: Module -> CheckModule (Maybe a)
+updateModuleEnv m = modulesEnv %= map update >> return Nothing
     where update :: Module -> Module
           update m' = if m == m' then m else m'
 
@@ -143,7 +134,7 @@ loadEnv path m = foldM (\ may (Import mn) ->
                         _-> do
                             mParsedM <- liftIO $ parseFromFileModule (pack mnf)
                             either (return . Just) loadEnv' mParsedM
-                    ) Nothing $ imports m
+                    ) Nothing $ m ^. imports
     where
         loadEnv' :: Module -> CheckModule (Maybe ModuleError)
         loadEnv' m = updateEnv m >> checkCycle >>= maybe (loadEnv path m) (return . Just)
@@ -160,10 +151,10 @@ loadEnv path m = foldM (\ may (Import mn) ->
 
 -- Queries for environments
 getFuncs :: Environment -> [FunDecl]
-getFuncs = concatMap (bare functions . validDecls)
+getFuncs = concatMap (bare functions . (^. validDecls))
 
 getVals :: Environment -> [ValDecl]
-getVals = concatMap (bare vals . validDecls)
+getVals = concatMap (bare vals . (^. validDecls))
 
 -- | Parsea una módulo en base a una dirección de archivo.
 parseFromFileModule :: TextFilePath -> IO (Either ModuleError Module)
@@ -188,7 +179,7 @@ loadMainModuleFromFile fp = do
               (\m -> do
                 let initCM = initStateCM (insModuleImports m emptyImMG) [m]
                 (mErr,st) <- runStateT (loadAndCheck m) initCM
-                maybe (return $ Right (st ^. modulesEnv,modName m)) (return . Left) mErr
+                maybe (return $ Right (st ^. modulesEnv,m ^. modName)) (return . Left) mErr
               ) mParsedM
     where
         loadAndCheck :: Module -> CheckModule (Maybe ModuleError)
@@ -197,5 +188,4 @@ loadMainModuleFromFile fp = do
                     loadEnv folder m >>= maybe checkEnvModules (return . Just)
 
 getModule :: Environment -> ModName -> Maybe Module
-getModule env mname = find ((== mname) . modName) env
-        
+getModule env mname = find ((== mname) . (^. modName)) env

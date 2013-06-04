@@ -11,6 +11,8 @@ import Data.Maybe (fromJust)
 import Data.Tuple (swap)
 import Data.List (zip3,replicate,nub)
 
+import Control.Lens
+
 type ImModuleGraph = Gr ModName ()
 
 -- | Grafo vacio de imports
@@ -23,16 +25,16 @@ insModuleImports m imMGraph =
         (\g -> insEdges (fromJust $ mImEdges g) g) $ insNodes mImNodes imMGraph
     where
         mImNames' :: [ModName]
-        mImNames' = filter (\m' -> m' `notElem` map snd (labNodes imMGraph)) (nub $ modName m : mImNames)
+        mImNames' = filter (`notElem` map snd (labNodes imMGraph)) (nub $ m ^. modName : mImNames)
         mImNames :: [ModName]
-        mImNames = map (\(Import m) -> m) $ imports m
+        mImNames = map (\(Import m) -> m) $ m ^. imports
         mImNodes :: [LNode ModName]
         mImNodes = mkNodes_ (fromGraph imMGraph) mImNames'
         numImports :: Int
-        numImports = length $ imports m
+        numImports = length $  m ^. imports
         mImEdges :: ImModuleGraph -> Maybe [LEdge ()]
         mImEdges g = mkEdges (fromGraph g) $ 
-                                zip3 (replicate numImports $ modName m)
+                                zip3 (replicate numImports $ m ^. modName )
                                      mImNames
                                      (replicate numImports ())
 

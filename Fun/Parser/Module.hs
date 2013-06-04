@@ -24,7 +24,7 @@ parseModule = do
         return $ Module mName imports (pDecls st) emptyInDeclsVerifs [] []
     where
         emptyInDeclsVerifs :: InvalidDeclsAndVerifs
-        emptyInDeclsVerifs = InvalidDeclsAndVerifs emptyInDeclarations []
+        emptyInDeclsVerifs = InvalidDeclsAndVerifs emptyInDecls []
         parseComments :: ParserD ()
         parseComments = many1 ( lineComment 
                              <|> blockComment 

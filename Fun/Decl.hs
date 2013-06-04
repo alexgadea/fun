@@ -16,9 +16,15 @@ import Control.Lens.Lens
 import Control.Lens
 
 
--- | Declaraciones en Fun
+-- | Especificaciones de funciones.
 data SpecDecl = Spec Variable [Variable] PE.PreExpr
-    deriving Show
+
+
+
+instance Show SpecDecl where
+    show (Spec f args e ) = Prelude.unlines [ show f ++ " :: " ++ show (varTy f)
+                                            , show f ++ " " ++ show args ++ " = " ++ show e
+                                            ]
 
 
 specName :: Lens SpecDecl SpecDecl Variable Variable
@@ -40,12 +46,14 @@ specSpec = lens get set
 instance Eq SpecDecl where
     (Spec f _ _) == (Spec f' _ _) = f == f'
 
+-- | Declaración de una propiedad, útil para declarar hipótesis.
 data PropDecl = Prop Text PE.PreExpr
     deriving Show
 
 instance Eq PropDecl where
     (Prop t _) == (Prop t' _) = t == t'
 
+-- | Declaración de un teorema.
 data ThmDecl = Thm Theorem
 
 instance Show ThmDecl where
@@ -54,6 +62,7 @@ instance Show ThmDecl where
 instance Eq ThmDecl where
     thm == thm' = getNameDecl thm == getNameDecl thm'
 
+-- | Declaración de una función.
 data FunDecl = Fun Variable [Variable] PE.PreExpr (Maybe Text) -- Puede tener la verificación o no.
 
 
@@ -92,8 +101,14 @@ instance Show FunDecl where
 instance Eq FunDecl where
     (Fun f _ _ _) == (Fun f' _ _ _) = f == f'
 
+-- | Declaración de un valor.
 data ValDecl = Val Variable PE.PreExpr
-    deriving Show
+
+instance Show ValDecl where
+    show (Val v e) = Prelude.unlines [ show v ++ " :: " ++ show (varTy v)
+                                     , show v ++ " = " ++ show e
+                                     ]
+
 
 valVar :: Lens ValDecl ValDecl Variable Variable
 valVar = lens get set
@@ -108,12 +123,15 @@ valExp = lens get set
 instance Eq ValDecl where
     (Val v _) == (Val v' _) = v == v'
 
+
+-- | Declaración de un operador.
 data OpDecl = OpDecl Operator [Variable] PE.PreExpr
     deriving Show
 
 instance Eq OpDecl where
     (OpDecl op _ _) == (OpDecl op' _ _) = op == op'
 
+-- | Declaración de una derivación
 data DerivDecl = Deriv Variable Variable [(PE.Focus,Proof)]
 
 instance Show DerivDecl where
@@ -124,6 +142,8 @@ instance Show DerivDecl where
 instance Eq DerivDecl where
     (Deriv v _ _) == (Deriv v' _ _) = v == v'
     
+
+-- | Declaración de un tipo.
 data TypeDecl = NewType Type [Constant] [(Operator,[Variable],PE.PreExpr)] -- Para implementar a futuro.
     deriving (Eq,Show)
 

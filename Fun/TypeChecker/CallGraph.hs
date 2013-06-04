@@ -27,23 +27,23 @@ $(makeLenses ''GrConstr)
 
 initGrConstr = GrConstr 0 []
 
-mkCallGraph :: [FunDecl] -> CallGraph
+mkCallGraph :: [(Variable,[Variable],PreExpr)] -> CallGraph
 mkCallGraph fs = let (edges,st) = runState (mapM go fs) initGrConstr
                  in mkGraph (st ^. nds) (concat edges)
-    where go (Fun f args body _) = addNode f >> addEdges f args body
+    where go (f,args,body) = addNode f >> addEdges f args body
 
 
 addNode :: Variable -> State GrConstr (LNode Variable)
 addNode v = lookupNode v >>= maybe (newNode v) (\n -> return (n,v))
 
 newNode :: Variable -> State GrConstr (LNode Variable)
-newNode v = gets (^. idx) >>= \n ->
-            modify (idx %~ (+1)) >> 
-            modify (nds %~ ((n,v):)) >>
+newNode v = use idx >>= \n -> 
+            idx %= (+1) >> 
+            nds %= ((n,v):) >>
             return (n,v)
 
 lookupNode :: Variable -> State GrConstr (Maybe Node)
-lookupNode v = maybe Nothing (Just . fst) . find ((v ==) . snd) <$> gets (^. nds)
+lookupNode v = maybe Nothing (Just . fst) . find ((v ==) . snd) <$> use nds
 
 addEdge :: Variable -> Variable -> State GrConstr UEdge
 addEdge f g = addNode f >>= \(nf,_) ->
@@ -57,10 +57,10 @@ connectedCalls :: CallGraph -> [[Variable]]
 connectedCalls gr = map (map getNode) $ scc gr
     where getNode n = maybe (error "IMPOSSIBLE") id $ lookup n (labNodes gr)
 
-mutualBlocks' :: [FunDecl] -> [[Variable]]
+mutualBlocks' :: [(Variable,[Variable],PreExpr)] -> [[Variable]]
 mutualBlocks' = connectedCalls . mkCallGraph
 
-mutualBlocks :: [FunDecl] -> [[FunDecl]]
-mutualBlocks fs = [[g | g <- fs, f <- fs' ,eqFun g f] | fs' <- fss]
+mutualBlocks :: [(Variable,[Variable],PreExpr)] -> [[Variable]]
+mutualBlocks fs = [[g | g <- map fst' fs, f <- fs' , g == f] | fs' <- fss]
     where fss = mutualBlocks' fs
-          eqFun (Fun f _ _ _) g = f == g
+          fst' (a,_,_) = a

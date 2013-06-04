@@ -1,3 +1,4 @@
+{-# Language TemplateHaskell #-}
 -- | Definimos la noción de módulo de fun.
 module Fun.Module where
 
@@ -5,7 +6,10 @@ import Fun.Verification
 import Fun.Declarations
 import Fun.Derivation
 
+import Control.Lens
+
 import Data.Text (Text)
+import Data.Function
 
 type ModName = Text
 
@@ -14,44 +18,46 @@ data InvalidDeclsAndVerifs =
                               , verifs :: [ErrInVerif Verification]
                               }
     deriving Show
-                            
-data Module = Module { modName       :: ModName
-                     , imports       :: [Import]
-                     , validDecls    :: Declarations
-                     , invalidDecls  :: InvalidDeclsAndVerifs
-                     , verifications :: [Verification]
-                     , derivations   :: [Derivation]
-                     }
 
-instance Eq Module where
-    m == m' = modName m == modName m'
-
-instance Show Module where
-    show m = unlines [ ""
-                     , "========LoadModule========="
-                     , "ModName: " ++ show (modName m)
-                     , "Imports: " ++ show (imports m)
-                     , ""
-                     , "Decls: " ++ show (validDecls m)
-                     , ""
-                     , "Verifications : " ++ show (verifications m)
-                     , "Derivations : " ++ show (derivations m)
-                     , "Invalid Decls : " ++ show (invalidDecls m)
-                     , "=========================="
-                     ]
 
 data Import = Import ModName
     deriving (Eq, Show)
 
+                            
+data Module = Module { _modName       :: ModName
+                     , _imports       :: [Import]
+                     , _validDecls    :: Declarations
+                     , _invalidDecls  :: InvalidDeclsAndVerifs
+                     , _verifications :: [Verification]
+                     , _derivations   :: [Derivation]
+                     }
+
+
+$(makeLenses ''Module)
+
+instance Eq Module where
+    (==) = (==) `on` (^. modName)
+
+instance Show Module where
+    show m = unlines [ ""
+                     , "========LoadModule========="
+                     , "ModName: " ++ show (_modName m)
+                     , "Imports: " ++ show (_imports m)
+                     , ""
+                     , "Decls: " ++ show (_validDecls m)
+                     , ""
+                     , "Verifications : " ++ show (_verifications m)
+                     , "Derivations : " ++ show (_derivations m)
+                     , "Invalid Decls : " ++ show (_invalidDecls m)
+                     , "=========================="
+                     ]
+
 
 allDeclsValid :: Module -> Bool
 allDeclsValid m = 
-    let invd = decls (invalidDecls m) in
+    let invd = decls (_invalidDecls m) in
         inSpecs invd == [] && inFunctions invd == [] &&
         inTheorems invd == [] && inProps invd == [] &&
         inVals invd == [] && inVals invd == [] &&
         inDerivs invd == [] &&
-        verifs (invalidDecls m) == []
-    
-    
-    
+        verifs (_invalidDecls m) == []

@@ -1,4 +1,4 @@
-{-# Language DoAndIfThenElse,OverloadedStrings #-}
+{-# Language DoAndIfThenElse,OverloadedStrings,TemplateHaskell #-}
 {-| Algoritmo de chequeo e inferencia de tipos para pre-expre-
 siones. Este algoritmo es esencialmente el de Hindley-Milner-Damas
 para el cálculo lambda: si tenemos informacion en la pre-expresion
@@ -9,34 +9,7 @@ el tipo de las variabes, ya que la informacion de las variables
 manera) está contenida en la expresión misma (en este aspecto se
 parece más al chequeo de un cálculo à la Church).
 -}
-module Fun.TypeChecker.Expr
-    ( unify
-    , TySubst
-    , emptySubst
-    , unifyTest
-    , unificate
-    , rewrite
-    -- , typeCheckPreExpr 
-    -- , typeCheckPre
-    , match
-    , match2
-      -- * Algoritmo de TypeChecking.
---    , checkPreExpr
-    , TCState(..)
-    , checkWithEnv
-    , checkWithFreshEnv
-    , initCtx
-    , TCCtx(..)
-    , TIMonad
-    , TCError(..)
-    , throwError
-    , unifyS
-    , modSubst
-    , getFreshTyVar
-    , updAss
-    , getSub
-    )
-    where
+module Fun.TypeChecker.Expr where
 
 import Equ.Syntax
 import Equ.PreExpr
@@ -53,8 +26,7 @@ import qualified Data.Set as Set (elems)
 import Control.Monad.Trans.Either (runEitherT, hoistEither)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State
--- import Control.Monad.RWS.Class (ask, tell, get, put,gets,modify)
--- import Control.Monad.RWS (runRWS)
+import Control.Lens hiding (rewrite,cons)
 
 import Control.Applicative((<$>))
 
@@ -67,12 +39,14 @@ type CtxSyn s = M.Map s [Type]
 -- de s&#237;mbolo; el contexto para los cuantificadores es fijo,
 -- inicialmente tiene los cuantificadores "homog&#233;neos" (por ejemplo,
 -- sumatoria est&#225;, pero forall no est&#225;).
-data TCCtx = TCCtx { vars :: CtxSyn VarName
-                   , ops  :: CtxSyn OpName 
-                   , cons :: CtxSyn ConName
-                   , quants :: CtxSyn QuantName
+data TCCtx = TCCtx { _vars :: CtxSyn VarName
+                   , _ops  :: CtxSyn OpName 
+                   , _cons :: CtxSyn ConName
+                   , _quants :: CtxSyn QuantName
                    }
          deriving Show
+
+$(makeLenses ''TCCtx)
 
 -- | El error est&#225; acompa&#241;ado de la expresi&#243;n enfocada donde ocurri&#243;.
 type TMErr = TyErr
@@ -88,11 +62,14 @@ type TyState a = TIMonad a
 
 type TIMonad a = StateT TCState (Either TCError) a
 
-data TCState = TCState { subst :: TySubst
-                       , funcs :: M.Map VarName [Type]
-                       , ctx   :: TCCtx
-                       , fTyVar :: Int
+data TCState = TCState { _subst :: TySubst
+                       , _funcs :: M.Map VarName [Type]
+                       , _ctx   :: TCCtx
+                       , _fTyVar :: Int
                        }
+
+$(makeLenses ''TCState)
+
 
 throwError :: String -> TIMonad a
 throwError = lift . Left . TCError
@@ -102,84 +79,86 @@ tyerr :: TyErr -> TyState a
 tyerr = throwError . show
 
 getSub :: TyState TySubst
-getSub = gets subst
+getSub = use subst
 
 getCtx :: TyState TCCtx
-getCtx = gets ctx
+getCtx = use ctx
 
 getFreshTyVar :: TyState Type
-getFreshTyVar = gets fTyVar >>= \n -> 
-                modify (\st -> st { fTyVar = n+1}) >>
+getFreshTyVar = use fTyVar >>= \n -> 
+                fTyVar %= (1+) >>
                 return (TyVar $ T.pack (show n))
 
 modCtx :: (TCCtx -> TCCtx) -> TyState ()
-modCtx f = modify (\st -> st { ctx = f (ctx st)})
+modCtx f = ctx %= f
 
 modSubst :: (TySubst -> TySubst) -> TyState ()
-modSubst f = modify (\st -> st { subst = f (subst st)}) >> getSub >>= updateCtxS
+modSubst f = subst %= f >> getSub >>= updateCtxS
 
 extCtx :: (Syntactic s,Ord k) => (s -> k) -> s -> [Type] -> CtxSyn k -> CtxSyn k
 extCtx f s = M.insertWith (flip const) (f s)
 
 extCtxV :: Variable -> Type -> TyState Type
-extCtxV v t = modCtx (\ctx -> ctx { vars = extCtx varName v [t] (vars ctx)}) >> return t
+extCtxV v t = modCtx (vars %~ extCtx varName v [t]) >> return t
 
 extCtxVar :: VarName -> Type -> TyState ()
-extCtxVar v t = modCtx (\ctx -> ctx { vars = M.insertWith (flip const) v [t] (vars ctx)})
+extCtxVar v t = modCtx (vars %~ M.insertWith (flip const) v [t])
 
 extCtxOp :: Operator -> Type -> TyState ()
-extCtxOp o t = modCtx (\ctx -> ctx { ops = extCtx opName o [t] (ops ctx)})
+extCtxOp o t = modCtx (ops %~ extCtx opName o [t])
 
 extCtxCon :: Constant -> Type -> TyState ()
-extCtxCon c t = modCtx (\ctx -> ctx { cons = extCtx conName c [t] (cons ctx)})
+extCtxCon c t = modCtx (cons %~ extCtx conName c [t])
 
 
 extCtxQuan :: Quantifier -> Type -> TyState ()
-extCtxQuan q t = modCtx (\ctx -> ctx { quants = extCtx quantName q [t] (quants ctx)})
+extCtxQuan q t = modCtx (quants %~ extCtx quantName q [t])
 
 
--- | Agrega los tipos vistos para una variable al contexto; esta funci&#243;n
--- se usa en el chequeo de tipos de cuantificadores.
+-- -- | Agrega los tipos vistos para una variable al contexto; esta funci&#243;n
+-- -- se usa en el chequeo de tipos de cuantificadores.
 addVar :: TCCtx -> Variable -> [Type] -> TCCtx
 addVar c _ [] = c
-addVar c v ts = c { vars = M.insert (tRepr v) ts (vars c) }
+addVar c v ts = vars %~ M.insert (tRepr v) ts $ c
 
--- | Devuelve un par con los tipos vistos de una variable y un nuevo
--- contexto sin esa variable.
+-- -- | Devuelve un par con los tipos vistos de una variable y un nuevo
+-- -- contexto sin esa variable.
 removeVar :: TCCtx -> Variable -> (TCCtx,[Type])
-removeVar c v = (c { vars = M.delete (tRepr v) (vars c) } , M.findWithDefault [] vn vs)
+removeVar c v = (vars %~ M.delete (tRepr v) $ c , M.findWithDefault [] vn vs)
     where vn = tRepr v
-          vs = vars c
+          vs = c ^. vars
 
--- | Chequeo de diferentes elementos sint&#225;cticos simples como
--- variables, constantes, s&#237;mbolos de funci&#243;n y operadores.
-checkSyn :: (Syntactic s,Ord k) => s -> (s -> k) -> (TCCtx -> M.Map k [Type]) -> TyState Type
-checkSyn s name getM = gets (getM . ctx) >>= \ctx ->
-                       case M.lookup (name s) ctx of
+-- -- | Chequeo de diferentes elementos sint&#225;cticos simples como
+-- -- variables, constantes, s&#237;mbolos de funci&#243;n y operadores.
+--checkSyn :: (Syntactic s,Ord k) => s -> (s -> k) -> (TCCtx -> M.Map k [Type]) -> TyState Type
+checkSyn s name getM = use (ctx . getM) >>= \ct ->
+                       case M.lookup (name s) ct of
                          Nothing -> tyerr $ ErrClashTypes s []
                          Just ts -> rewriteS (head ts)
 
--- | Las diferentes instancias de checkSyn.
+-- -- | Las diferentes instancias de checkSyn.
 -- checkVar :: -- Syntactic s => s -> TyState Type
-checkVar v = gets (vars . ctx) >>= \ctx ->
+checkVar v = use (ctx . vars) >>= \ctx ->
              case M.lookup (varName v) ctx of
-               Nothing -> gets funcs >>= \ass ->
+               Nothing -> use funcs >>= \ass ->
                           case M.lookup (varName v) ass of
                             Nothing -> tyerr $ ErrClashTypes v [] -- error "Ahhh"
+                            Just [] -> tyerr $ ErrClashTypes v []
                             Just ts -> rewriteS (head ts)
+               Just [] -> tyerr $ ErrClashTypes v []
                Just ts -> rewriteS (head ts)
 checkCon :: Constant -> TyState Type
-checkCon c = checkSyn c conName  cons
+checkCon c = checkSyn c conName cons
 checkOp :: Operator -> TyState Type
 checkOp op = checkSyn op opName ops
 checkQuant :: Quantifier -> TyState Type
 checkQuant q = checkSyn q quantName quants
 
--- | Actualiza los tipos en el contexto.
+-- -- | Actualiza los tipos en el contexto.
 updateCtx :: TCCtx -> TySubst -> TCCtx
-updateCtx ctx subst = ctx { vars = M.map (map (rewrite subst)) (vars ctx) 
-                          , ops = M.map (map (rewrite subst)) (ops ctx) 
-                          , cons = M.map (map (rewrite subst)) (cons ctx) }
+updateCtx ctx subst = execState (do vars %= M.map (map (rewrite subst));
+                                    ops  %= M.map (map (rewrite subst));
+                                    cons %= M.map (map (rewrite subst))) ctx
 
 updateCtxS :: TySubst -> TyState ()
 updateCtxS = modCtx . flip updateCtx
@@ -200,12 +179,13 @@ rewriteS t = flip rewrite t <$> getSub
 
 updAss :: M.Map VarName [Type] -> TIMonad ()
 updAss ass = getSub >>= \subst -> 
-             modify (\s -> s { funcs = M.map (map (rewrite subst)) ass})
-
+             funcs .= M.map (map (rewrite subst)) ass >>
+             updateCtxS subst
 
 updAss' :: TIMonad ()
 updAss' = getSub >>= \subst -> 
-         modify (\s -> s { funcs = M.map (map (rewrite subst)) (funcs s)})
+          funcs %= M.map (map (rewrite subst)) >>
+          updateCtxS subst
 
 check :: PreExpr -> TyState Type
 check (Var v) = checkVar v
@@ -280,18 +260,16 @@ checkPat (Paren p) = checkPat p
 checkPat _ = error "Expression is not a pattern."
 
 initCtx :: TCCtx
-initCtx = TCCtx { vars = M.empty
-              , ops  = M.empty
-              , cons = M.empty
-              , quants = M.empty
-              }
+initCtx = TCCtx { _vars = M.empty
+                , _ops  = M.empty
+                , _cons = M.empty
+                , _quants = M.empty
+                }
 
-check' e = initCtxE e >> check e
-
-initTCState = TCState { subst = emptySubst
-                      , ctx = initCtx
-                      , fTyVar = 0
-                      , funcs = M.empty
+initTCState = TCState { _subst = emptySubst
+                      , _ctx = initCtx
+                      , _fTyVar = 0
+                      , _funcs = M.empty
                       }
 
 -- | Construye un contexto con variables frescas para las variables
@@ -336,29 +314,15 @@ initCtxE :: PreExpr -> TyState ()
 initCtxE e = mkCtxOps e >> mkCtxCon e >> mkCtxQuan e
 
 mkSubst :: TCCtx -> ((Variable -> Type), (Constant -> Type), (Operator -> Type))
-mkSubst (TCCtx vars ops cons _) = (updVar,updCons,updOps)
-    where updVar = M.foldrWithKey (\vname ty f var -> if varName var == vname then head ty else f var) tyUnk vars
-          updCons = M.foldrWithKey (\cname ty f con -> if conName con == cname then head ty else f con) tyUnk cons
-          updOps =  M.foldrWithKey (\opname ty f op -> if opName op == opname then head ty else f op) tyUnk ops
+mkSubst (TCCtx vars ops cons _) = (upd varName vars,upd conName cons,upd opName ops)
+    where upd field = M.foldrWithKey (\vname ty f var -> if field var == vname then head ty else f var) tyUnk
           tyUnk _ = TyUnknown
 
 setType' :: TCCtx -> PreExpr -> PreExpr
 setType' ctx e = setType v c o e
     where (v,c,o) = mkSubst ctx 
 
--- -- | Retorna el tipo de una expresi&#243;n bien tipada.
--- checkPreExpr :: PreExpr -> Either TCError Type
--- checkPreExpr e = either Left (Right . fst) $ runStateT (check' e) initTCState 
-
 checkWithEnv :: M.Map VarName Type -> PreExpr -> TyState Type
 checkWithEnv env e = initCtxE e >> mapM_ (uncurry extCtxVar) (M.toList env) >> check e
 
-checkWithFreshEnv ass fun args e = initCtxE e >>
-                                   sequence [(\t -> extCtxV v t >> return t) =<< getFreshTyVar | v <- args] >>= \ts ->
-                                   getFreshTyVar >>= \tr ->
-                                   extCtxV fun (foldr (:->) tr ts) >>
-                                   check e >>= \ty ->
-                                   unifyS tr ty >>                                   
-                                   updAss' >>
-                                   rewriteS tr
-
+setTypeS e = use ctx >>= return . flip setType' e

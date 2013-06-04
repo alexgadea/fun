@@ -43,6 +43,7 @@ Library
 
     Other-modules:          Fun.TypeChecker.CallGraph,
                             Fun.TypeChecker.Expr
+                            Fun.TypeChecker.Proof
 
     Build-depends:          base >= 4.2, text >= 0.11.1.5, 
                             containers >= 0.4.0.0, equ >= 0.2, 

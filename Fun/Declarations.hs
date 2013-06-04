@@ -17,7 +17,6 @@ import Equ.IndType
 import qualified Data.List as L
 import qualified Data.Set as S 
 import Data.Text hiding (map,concatMap,unlines,reverse,foldl)
-import Data.Either (partitionEithers)
 import Data.Maybe (fromJust,fromMaybe,mapMaybe)
 import Data.Monoid
 import Text.Parsec.Pos (newPos)
@@ -106,16 +105,27 @@ filterValidDecls vds ivds =
         notIn' (_,d) errds = d `L.notElem` (L.map snd errds)
         notIn :: (Eq d, Decl d) => Annot d -> [ErrInDecl d] -> Bool
         notIn (_,d) errds = d `L.notElem` (L.map eDecl errds)
-                 
+
 
 instance Show Declarations where
     show decls = unlines [ ""
-                         , "Specs: "   ++ show (_specs decls)
-                         , "Funs:  "   ++ show (_functions decls) 
-                         , "Thms:  "   ++ show (_theorems decls) 
-                         , "Props: "   ++ show (_props decls) 
-                         , "Vals:  "   ++ show (_vals decls)
-                         , "Derivs:  " ++ "[" ++ concatMap showDer (_derivs decls) ++ "]"
+                         , "Especificaciones: "
+                         ,  show (_specs decls)
+                         , ""
+                         , "Funcioness:  " 
+                         , show (bare functions decls) 
+                         , ""
+                         , "Teoremas:  "
+                         , show (bare theorems decls) 
+                         , ""
+                         , "Proposiciones: " 
+                         , show (bare props decls) 
+                         , ""
+                         , "Valores:  " 
+                         , show (bare vals decls)
+                         , "" 
+                         , "Derivaciones:  "
+                         , "[" ++ concatMap showDer (decls ^. derivs) ++ "]"
                          ]
         where
             showDer :: Annot DerivDecl -> String
@@ -145,10 +155,10 @@ envAddDeriv :: Annot DerivDecl -> Declarations -> Declarations
 envAddDeriv = over derivs . (:)
 
 valsDef :: Declarations -> [Variable]
-valsDef = L.map ((^. valVar) . snd) . (^. vals)
+valsDef = L.map (^. (_2 . valVar)) . (^. vals)
 
 funcsDef :: Declarations -> [Variable]
-funcsDef = L.map ((^. funDeclName) . snd) . (^. functions)
+funcsDef = L.map (^. (_2 . funDeclName)) . (^. functions)
 
 okDecl :: (Decl d) => Annot d -> [DeclError] -> Either (ErrInDecl d) d
 okDecl ann [] = Right (ann ^. _2)
@@ -220,9 +230,7 @@ hypListFromDecls decls thms = mapMaybe createHypDecl thms <>
 addDeclHypothesis :: Declarations -> [ThmDecl] -> Declarations -> Proof -> Proof
 addDeclHypothesis decls validThms mImportDecls pr = foldl addHyps pr $ hypListFromDecls dswi validThms
 
-    where imThms :: [ThmDecl]
-          imThms = bareThms mImportDecls
-          addHyps :: Proof -> Hypothesis -> Proof
+    where addHyps :: Proof -> Hypothesis -> Proof
           addHyps p hyp = fromJust $ addDeclsHyp p hyp
           addDeclsHyp :: Proof -> Hypothesis -> Maybe Proof
           addDeclsHyp p hyp = getCtx p >>= \ctx -> setCtx (addHypothesis' hyp ctx) p
@@ -232,14 +240,19 @@ addDeclHypothesis decls validThms mImportDecls pr = foldl addHyps pr $ hypListFr
         
 checkVals :: Declarations -> Declarations ->
              [Either (ErrInDecl ValDecl) ValDecl]
-checkVals ds imds = checkDecls vals ds imds $ checkDecl checkDefVar
+checkVals ds imds = checkDecls vals ds imds $ checkDecl checkDefVarVal
 
+-- | Chequeo de variables
 checkDefVar :: Decl d => d -> Declarations -> [DeclError]
 checkDefVar d ds = concatMap inScope . S.toList . PE.freeVars . getFocusDecl $ d
     where
         inScope :: Variable -> [DeclError]
         inScope v = if v `L.elem` vars then [] else [NotInScopeVar v]
         vars = valsDef ds ++ funcsDef ds ++ fromMaybe [] (getVarsDecl d)
+
+checkDefVarVal :: ValDecl ->  Declarations -> [DeclError]
+checkDefVarVal d ds = checkDefVar d $ (vals  %~ L.filter ((d/=) . snd)) ds
+
 
 getFocusDecl :: Decl d => d -> PE.PreExpr
 getFocusDecl = fromJust . getExprDecl 
@@ -275,15 +288,14 @@ mapIndTypes = [ (TyAtom ATyNat,natural)
               , (TyList (tyVar "A"), list)
               ]
 
-emptyInDeclarations :: InvalidDeclarations
-emptyInDeclarations = 
-     InvalidDeclarations { inSpecs      = []
-                         , inFunctions  = []
-                         , inTheorems   = []
-                         , inProps      = []
-                         , inVals       = []
-                         , inDerivs     = []
-                         }
+emptyInDecls :: InvalidDeclarations
+emptyInDecls = InvalidDeclarations { inSpecs      = []
+                                   , inFunctions  = []
+                                   , inTheorems   = []
+                                   , inProps      = []
+                                   , inVals       = []
+                                   , inDerivs     = []
+                                   }
 
 initDeclarations :: Declarations
 initDeclarations = flip execState mempty $ do theorems .= map (const initDeclPos &&& Thm) initThms;
