@@ -93,31 +93,32 @@ addAssumption (f,args) = use funcs >>= \ass ->
                               getFreshTyVar >>= \tr ->
                               updAss $ M.insert (varName f) [exponential tr ts] ass
 
-tcCheckModule :: Module -> TIMonad Module
-tcCheckModule m = do let decls = m ^. validDecls
-                     let fs   = bare functions decls
-                     let sps  = bare specs decls
-                     let vls  = decls ^. vals 
-                     let thms = decls ^. theorems
-                     let prps = decls ^. props
-                     let env  = map (\f -> (f ^. funDeclName,f ^. funDeclArgs)) fs
-                             ++ map (\f -> (f ^. specName,f ^. specArgs)) sps
+tcCheckModule :: Module -> [(VarName,[Type])] -> TIMonad Module
+tcCheckModule m a = do let decls = m ^. validDecls
+                       let fs   = bare functions decls
+                       let sps  = bare specs decls
+                       let vls  = decls ^. vals 
+                       let thms = decls ^. theorems
+                       let prps = decls ^. props
+                       let env  = map (\f -> (f ^. funDeclName,f ^. funDeclArgs)) fs
+                               ++ map (\f -> (f ^. specName,f ^. specArgs)) sps
 
-                     mapM_ addAssumption env
+                       updAss (M.fromList a)
+                       mapM_ addAssumption env
 
-                     fbds <- mapM checkFunDecl fs
-                     sbds <- mapM checkSpecDecl sps
-                     vls' <- mapM checkVal vls
-                     thms' <- mapM tcCheckThm thms
-                     prps' <- mapM tcCheckProp prps
+                       fbds <- mapM checkFunDecl fs
+                       sbds <- mapM checkSpecDecl sps
+                       vls' <- mapM checkVal vls
+                       thms' <- mapM tcCheckThm thms
+                       prps' <- mapM tcCheckProp prps
 
-                     env <- use funcs 
+                       env <- use funcs 
 
-                     return $ execState (do validDecls . functions %= updFunTypes fbds env ;
-                                            validDecls . specs  %= updSpecTypes sbds env    ;
-                                            validDecls . vals  .= vls'                     ;
-                                            validDecls . theorems .= thms';
-                                            validDecls . props .= prps';
+                       return $ execState (do validDecls . functions %= updFunTypes fbds env ;
+                                              validDecls . specs  %= updSpecTypes sbds env    ;
+                                              validDecls . vals  .= vls'                     ;
+                                              validDecls . theorems .= thms';
+                                              validDecls . props .= prps';
                                             ) m
 
 updFunTypes :: [(VarName,PreExpr)] -> Ass -> [Annot FunDecl] -> [Annot FunDecl]
@@ -153,10 +154,10 @@ withoutLocal = foldr (delete . varName)
 localState :: [Variable] -> TIMonad ()
 localState args = ctx . vars %= flip withoutLocal args
 
-typeCheckDeclarations :: Module -> Either String Module
-typeCheckDeclarations m = case runStateT (tcCheckModule m) (TCState empty empty initCtx 0) of
-                              Left (TCError err) -> Left $ err
-                              Right (m',_) ->  Right m' -- updateTypes env (s ^. funcs)
+typeCheckDeclarations :: Module -> [(VarName,[Type])] -> Either String Module
+typeCheckDeclarations m ass = case runStateT (tcCheckModule m ass) (TCState empty empty initCtx 0) of
+                                Left (TCError err) -> Left $ err
+                                Right (m',_) ->  Right m' -- updateTypes env (s ^. funcs)
 
 updateAss :: TySubst -> Ass -> Ass
 updateAss s = M.map (map (rewrite s))

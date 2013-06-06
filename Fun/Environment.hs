@@ -8,11 +8,14 @@ import Fun.Module
 import Fun.Module.Graph
 import Fun.Module.Error
 import Fun.Parser 
-import Fun.Decl(FunDecl,ValDecl)
+import Fun.Decl 
 import Fun.Declarations
 import Fun.Verification
 import Fun.Derivation
 import Fun.TypeChecker
+
+import Equ.Syntax
+import Equ.Types
 
 import Data.Either (lefts,rights,partitionEithers)
 import qualified Data.List as L (map)
@@ -23,6 +26,7 @@ import Data.Monoid(mconcat)
 import System.FilePath.Posix
 
 import Control.Lens
+import Control.Arrow ((&&&))
 import Control.Monad (foldM,(>=>))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.State
@@ -68,8 +72,9 @@ checkModule m = do
 
     let invalidVals = lefts $ checkVals  (m ^. validDecls) mImportedDecls
 
+    let ass = getTypesAss mImports
 
-    let tcres = typeCheckDeclarations m
+    let tcres = typeCheckDeclarations m ass
 
     let thmsCheck = checkThm (m ^. validDecls) mImportedDecls
     let invalidThms  = lefts thmsCheck
@@ -154,12 +159,6 @@ loadEnv path m = foldM loadImp Nothing $ m ^. imports
         updateEnv m' = imMGraph   %= insModuleImports m >> 
                        modulesEnv %= addModuleEnv m'
 
--- Queries for environments
-getFuncs :: Environment -> [FunDecl]
-getFuncs = concatMap (bare functions . (^. validDecls))
-
-getVals :: Environment -> [ValDecl]
-getVals = concatMap (bare vals . (^. validDecls))
 
 -- | Parsea una módulo en base a una dirección de archivo.
 parseFromFileModule :: TextFilePath -> IO (Either ModuleError Module)
@@ -175,3 +174,21 @@ readModule fp = C.try (readFile fp) >>= either discardError (return . Right)
 
 getModule :: Environment -> ModName -> Maybe Module
 getModule env mname = find ((== mname) . (^. modName)) env
+
+
+-- | Queries for environments
+getFuncs :: Environment -> [FunDecl]
+getFuncs = concatMap (bare functions . (^. validDecls))
+
+getSpecs :: Environment -> [SpecDecl]
+getSpecs = concatMap (bare specs . (^. validDecls))
+
+getVals :: Environment -> [ValDecl]
+getVals = concatMap (bare vals . (^. validDecls))
+
+getTypesAss :: Environment -> [(VarName,[Type])]
+getTypesAss = mconcat [ map (ass . (^. funDeclName)) . getFuncs
+                      , map (ass . (^. specName))    . getSpecs
+                      , map (ass . (^. valVar))      . getVals ]
+    where ass = (varName &&& return . varTy)
+             
