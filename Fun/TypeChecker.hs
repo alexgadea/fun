@@ -48,10 +48,13 @@ checkVal (pos,(Val var expr)) = checkWithEnv M.empty expr >>= \t ->
     where getType TyUnknown = getFreshTyVar
           getType t = return t
 
-tcCheckProp :: PropDecl -> TIMonad ()
-tcCheckProp (Prop _ expr) = checkWithEnv M.empty expr >>= \t -> 
-                            unifyS t (TyAtom ATyBool) >> 
-                            updAss'
+tcCheckProp :: Annot PropDecl -> TIMonad (Annot PropDecl)
+tcCheckProp ap@(_,Prop pn expr) = mkCtxVar expr >> 
+                                 checkWithEnv M.empty expr >>= \t -> 
+                                 unifyS t (TyAtom ATyBool) >> 
+                                 updAss' >>
+                                 setTypeS expr >>= \e ->
+                                 return $ second (const $ Prop pn e) ap
 
 tcCheckThm :: Annot ThmDecl -> TIMonad (Annot ThmDecl)
 tcCheckThm (pos,(Thm t)) = mkCtxVar (getPreExpr . thExpr $ t) >>
@@ -96,7 +99,7 @@ tcCheckModule m = do let decls = m ^. validDecls
                      let sps  = bare specs decls
                      let vls  = decls ^. vals 
                      let thms = decls ^. theorems
-                     let prps = bare props decls
+                     let prps = decls ^. props
                      let env  = map (\f -> (f ^. funDeclName,f ^. funDeclArgs)) fs
                              ++ map (\f -> (f ^. specName,f ^. specArgs)) sps
 
@@ -106,14 +109,16 @@ tcCheckModule m = do let decls = m ^. validDecls
                      sbds <- mapM checkSpecDecl sps
                      vls' <- mapM checkVal vls
                      thms' <- mapM tcCheckThm thms
-                     mapM_ tcCheckProp prps
+                     prps' <- mapM tcCheckProp prps
 
                      env <- use funcs 
 
-                     return $ execState (do (validDecls . functions) %= updFunTypes fbds env ;
-                                            (validDecls . specs) %= updSpecTypes sbds env    ;
-                                            (validDecls . vals)  .= vls'                     ;
-                                            validDecls . theorems .= thms') m
+                     return $ execState (do validDecls . functions %= updFunTypes fbds env ;
+                                            validDecls . specs  %= updSpecTypes sbds env    ;
+                                            validDecls . vals  .= vls'                     ;
+                                            validDecls . theorems .= thms';
+                                            validDecls . props .= prps';
+                                            ) m
 
 updFunTypes :: [(VarName,PreExpr)] -> Ass -> [Annot FunDecl] -> [Annot FunDecl]
 updFunTypes bds ass fs = map updDecl fs
