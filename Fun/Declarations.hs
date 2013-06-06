@@ -16,6 +16,7 @@ import Equ.IndType
 
 import qualified Data.List as L
 import qualified Data.Set as S 
+import qualified Data.Map as M
 import Data.Text hiding (map,concatMap,unlines,reverse,foldl)
 import Data.Maybe (fromJust,fromMaybe,mapMaybe)
 import Data.Monoid
@@ -228,12 +229,14 @@ hypListFromDecls decls thms = mapMaybe createHypDecl thms <>
 -- Esta funcion agrega a una prueba las hipótesis correspondientes a todas las declaraciones
 -- definidas y los teoremas validos.
 addDeclHypothesis :: Declarations -> [ThmDecl] -> Declarations -> Proof -> Proof
-addDeclHypothesis decls validThms mImportDecls pr = foldl addHyps pr $ hypListFromDecls dswi validThms
+addDeclHypothesis decls validThms mImportDecls pr = 
+    foldl (\p h -> addCtxJust (addHypothesis' h M.empty) p) pr $ hypListFromDecls dswi validThms
+--     foldl addHyps pr $ hypListFromDecls dswi validThms
 
     where addHyps :: Proof -> Hypothesis -> Proof
           addHyps p hyp = fromJust $ addDeclsHyp p hyp
           addDeclsHyp :: Proof -> Hypothesis -> Maybe Proof
-          addDeclsHyp p hyp = getCtx p >>= \ctx -> setCtx (addHypothesis' hyp ctx) p
+          addDeclsHyp p hyp = addCtx (addHypothesis' hyp M.empty) p
           dswi :: Declarations 
           dswi = decls <> mImportDecls
 

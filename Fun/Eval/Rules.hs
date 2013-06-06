@@ -26,6 +26,8 @@ data EvalRule = EvalRule {
       , rexpr :: Expr
       , name :: String
 }
+instance Show EvalRule where
+    show = name
 
 -- | Clasificamos las reglas según la forma de las expresiones
 binOpRules = [ePlusZero,ePlusSucc,eProdZero,eProdSucc,eMinZero,eMinSucc,
@@ -47,7 +49,7 @@ ifRules = [eIfTrue,eIfFalse]
 --   de la regla.
 matchRule :: PreExpr -> EvalRule -> Maybe PreExpr
 matchRule e r =
-    either (const Nothing)  
+    either (const Nothing)
            (-- ver qué pasa con el otro elemento que retorna match)
             \(subst,_) -> return (rexpr r) >>=
             \(Expr re) -> return (applySubst re subst))
@@ -72,7 +74,7 @@ matchRulesTrace :: PreExpr -> [EvalRule] -> Maybe (PreExpr,String)
 matchRulesTrace e rs = matchRules' e rs matchRuleTrace
     
     
-matchRules' :: PreExpr -> [EvalRule] -> (PreExpr -> EvalRule -> Maybe a) -> Maybe a
+matchRules' :: Show a => PreExpr -> [EvalRule] -> (PreExpr -> EvalRule -> Maybe a) -> Maybe a
 matchRules' e rs f = return (catMaybes $ map (f e) rs) >>=
                      \ls -> case ls of
                                 [] -> Nothing

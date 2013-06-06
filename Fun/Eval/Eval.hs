@@ -127,16 +127,10 @@ evalStep' mrules sr e@(BinOp op e1 e2) =
             return . mapFst (flip (BinOp op) e2))
 evalStep' mrules sr e@(If b e1 e2) =
     whenMT (isCanonical b)
-           (whenMT (isCanonical e1)
-                   (whenMT (isCanonical e2)
-                           (lift (mrules e ifRules))
-                           (evalStep' mrules sr e2 >>=
-                                return . mapFst (If b e1)))
-                   (evalStep' mrules sr e1 >>=
-                        return . mapFst (flip (If b) e2)))
+           (lift (mrules e ifRules))
            (evalStep' mrules sr b >>=
                 \(bcan,a) -> return (If bcan e1 e2,a))
-            
+                
 {- | En la tesis, tenemos expresiones lambda para expresar la evaluación de funciones.
      Aqui una variable puede ser aplicada si está en el environment de declaraciones de funciones.
      Si la función es de un solo argumento, la aplicación es directa (se reemplaza la variable por el valor
