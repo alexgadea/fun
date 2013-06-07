@@ -74,36 +74,36 @@ checkModule m = do
 
     let ass = getTypesAss mImports
 
-    let tcres = typeCheckDeclarations m ass
+    flip (either (\err -> return . Just $ createError (m ^. modName) ([],[],[],[],[],[],err)))
+         (typeCheckDeclarations m ass) $ \m' -> do
+      let thmsCheck = checkThm (m' ^. validDecls) mImportedDecls
+      let invalidThms  = lefts thmsCheck
 
-    let thmsCheck = checkThm (m ^. validDecls) mImportedDecls
-    let invalidThms  = lefts thmsCheck
-
-    -- Si hay derivaciones sin especificación, o derivaciones
-    -- repetidas, entonces la lista eDerivs tendrá errores de
-    -- derivación.
-    let eDerivs = createDerivations (m ^. validDecls)
-        
+      -- Si hay derivaciones sin especificación, o derivaciones
+      -- repetidas, entonces la lista eDerivs tendrá errores de
+      -- derivación.
+      let eDerivs = createDerivations (m' ^. validDecls)
+          
     
-    let validThms = rights thmsCheck ++ bareThms mImportedDecls
-    let checkedDerivs = partitionEithers $ 
-             L.map (checkDerivation (m ^. validDecls) mImportedDecls validThms) eDerivs
+      let validThms = rights thmsCheck ++ bareThms mImportedDecls
+      let checkedDerivs = partitionEithers $ 
+               L.map (checkDerivation (m' ^. validDecls) mImportedDecls validThms) eDerivs
     
-    let eVerifs = createVerifications (m ^. validDecls) mImportedDecls
-    let checkedVerifs = partitionEithers $ L.map checkVerification eVerifs
+      let eVerifs = createVerifications (m' ^. validDecls) mImportedDecls
+      let checkedVerifs = partitionEithers $ L.map checkVerification eVerifs
     
-    let inDeclarations = InvalidDeclarations [] [] invalidThms [] [] (fst checkedDerivs)
+      let inDeclarations = InvalidDeclarations [] [] invalidThms [] [] (fst checkedDerivs)
 
-    let warning (inVerif,verif) ders = updateModuleEnv .
-                                       execState (do validDecls %= updateValidDecls inDeclarations ders;
-                                                     verifications .= verif;
-                                                     invalidDecls .= InvalidDeclsAndVerifs inDeclarations inVerif)
+      let warning (inVerif,verif) ders = updateModuleEnv .
+                                         execState (do validDecls %= updateValidDecls inDeclarations ders;
+                                                       verifications .= verif;
+                                                       invalidDecls .= InvalidDeclsAndVerifs inDeclarations inVerif)
 
 
-    case (invalidSpec, invalidFuns, invalidVals, tcres) of
-        ([],[],[], Right m') -> warning checkedVerifs (snd checkedDerivs) m'
-        (e1,e2,e3,e4)  -> return . Just $ createError (m ^. modName) errors
-            where errors = (e1,e2,e3,invalidThms,fst checkedVerifs,fst checkedDerivs,either id (const "") e4)
+      case (invalidSpec, invalidFuns, invalidVals) of
+          ([],[],[]) -> warning checkedVerifs (snd checkedDerivs) m'
+          (e1,e2,e3)  -> return . Just $ createError (m' ^. modName) errors
+              where errors = (e1,e2,e3,invalidThms,fst checkedVerifs,fst checkedDerivs,"")
 
                            
 updateValidDecls :: InvalidDeclarations -> [Annot FunDecl] -> Declarations -> Declarations

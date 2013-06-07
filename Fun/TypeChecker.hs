@@ -10,11 +10,10 @@ import Fun.Declarations
 import Fun.Decl
 
 import Equ.PreExpr
-import Equ.Proof.Proof(Theorem(..))
+import Equ.Proof.Proof(Theorem(..),updThmExp,updThmPrf)
 import Equ.Syntax(VarName)
 import Equ.Types
 import Equ.Expr (getPreExpr)
-import Equ.Proof.Proof(updThmExp)
 import Equ.TypeChecker.Unification
 
 import Data.Map (Map,fromList,delete,empty)
@@ -61,8 +60,8 @@ tcCheckThm (pos,(Thm t)) = mkCtxVar (getPreExpr . thExpr $ t) >>
                            checkWithEnv M.empty (getPreExpr . thExpr $ t) >>= \ty ->
                            unifyS ty (TyAtom ATyBool) >>
                            setTypeS (getPreExpr . thExpr $ t) >>= \e ->
-                           chkProof (thProof t) >>
-                           return (pos,Thm (updThmExp e t))
+                           chkProof (thProof t) >>= \ p' ->
+                           return (pos,Thm (updThmPrf p' (updThmExp e t)))
 
 checkDeriv :: DerivDecl -> TIMonad ()
 checkDeriv (Deriv f n prfs) = return ()
