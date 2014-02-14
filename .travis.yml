@@ -2,3 +2,4 @@ language: haskell
 
 before_install:
     - git submodule update --init --recursive
+    - cabal install equ/equ.cabal
