@@ -5,7 +5,6 @@ import Fun.Decl
 
 import Equ.PreExpr
 import Equ.Proof
-import Equ.Syntax
 import Equ.IndType
 
 import Data.Text

@@ -79,6 +79,7 @@ $(makeLenses ''Declarations)
 bare :: Getting [Annot d] Declarations [Annot d] -> Declarations -> [d]
 bare f = map snd . (^. f)
 
+bareThms :: Declarations -> [ThmDecl]
 bareThms = bare theorems
 
 instance Monoid Declarations where
@@ -206,7 +207,7 @@ checkThm ds imds = zip' $ foldl chkThm ([],[]) thmDefs
                 [] -> case validateProof (prfWithDecls okThms thm) of
                         Right _ -> (errThms, thm : okThms)
                         Left err  -> (ErrInDecl pos [InvalidProofForThm err] thm :errThms,okThms)
-                errs -> (ErrInDecl pos errs thm : errThms, okThms)
+                ers -> (ErrInDecl pos ers thm : errThms, okThms)
 
           prfWithDecls thms (Thm p) = addDeclHypothesis ds (thms ++ bareThms imds) imds (thProof p)
         -- Grupo de declaraciones de un módulos mas las de sus imports
@@ -214,7 +215,7 @@ checkThm ds imds = zip' $ foldl chkThm ([],[]) thmDefs
           dswi = ds <> imds
           thmDefs :: [Annot ThmDecl]
           thmDefs = reverse $ ds ^. theorems
-          zip' (errs,oks) = map Left errs ++ map Right oks
+          zip' (ers,oks) = map Left ers ++ map Right oks
 
 hypListFromDecls :: Declarations -> [ThmDecl] -> [Hypothesis]
 hypListFromDecls decls thms = mapMaybe createHypDecl thms <>
@@ -224,7 +225,7 @@ hypListFromDecls decls thms = mapMaybe createHypDecl thms <>
                                       , hyps _props] decls 
                               
     where hyps :: Decl d => (Declarations -> [Annot d]) -> Declarations -> [Hypothesis]
-          hyps f decls = mapMaybe (createHypDecl . snd) $ f decls
+          hyps f ds = mapMaybe (createHypDecl . snd) $ f ds
         
 -- Esta funcion agrega a una prueba las hipótesis correspondientes a todas las declaraciones
 -- definidas y los teoremas validos.
@@ -233,11 +234,7 @@ addDeclHypothesis decls validThms mImportDecls pr =
     foldl (\p h -> addCtxJust (addHypothesis' h M.empty) p) pr $ hypListFromDecls dswi validThms
 --     foldl addHyps pr $ hypListFromDecls dswi validThms
 
-    where addHyps :: Proof -> Hypothesis -> Proof
-          addHyps p hyp = fromJust $ addDeclsHyp p hyp
-          addDeclsHyp :: Proof -> Hypothesis -> Maybe Proof
-          addDeclsHyp p hyp = addCtx (addHypothesis' hyp M.empty) p
-          dswi :: Declarations 
+    where dswi :: Declarations 
           dswi = decls <> mImportDecls
 
         

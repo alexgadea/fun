@@ -1,25 +1,20 @@
 {-# Language NoMonomorphismRestriction #-}
+-- | Definición de los tipos de declaraciones que tenemos en el lenguaje.
 module Fun.Decl where
 
 import qualified Equ.PreExpr as PE
 import Equ.Syntax
-import Equ.Rule
+import Equ.Rule hiding (rel)
 import Equ.Proof
 import Equ.Types
 import Equ.Expr
 import Equ.TypeChecker (getType)
 import Equ.Theories (createHypothesis,makeExprFromRelation)
-import Data.Text hiding (map,all)
-import Fun.Decl.Error
 import Data.Text (pack,unpack,Text)
-import Control.Lens.Lens
-import Control.Lens
-
+import Control.Lens hiding (op)
 
 -- | Especificaciones de funciones.
 data SpecDecl = Spec Variable [Variable] PE.PreExpr
-
-
 
 instance Show SpecDecl where
     show (Spec f args e ) = Prelude.unlines [ show f ++ " :: " ++ show (varTy f)
@@ -28,19 +23,19 @@ instance Show SpecDecl where
 
 
 specName :: Lens SpecDecl SpecDecl Variable Variable
-specName = lens get set
-    where get (Spec f _ _) = f
-          set (Spec _ as spec) f = Spec f as spec
+specName = lens g s
+    where g (Spec f _ _) = f
+          s (Spec _ as spec) f = Spec f as spec
 
 specArgs :: Lens SpecDecl SpecDecl [Variable] [Variable]
-specArgs = lens get set
-    where get (Spec _ as _) = as
-          set (Spec f _ spec) as = Spec f as spec
+specArgs = lens g s
+    where g (Spec _ as _) = as
+          s (Spec f _ spec) as = Spec f as spec
 
 specSpec :: Lens SpecDecl SpecDecl PE.PreExpr PE.PreExpr
-specSpec = lens get set
-    where get (Spec _ _ spec) = spec
-          set (Spec f as _) spec = Spec f as spec
+specSpec = lens g s
+    where g (Spec _ _ spec) = spec
+          s (Spec f as _) spec = Spec f as spec
 
 
 instance Eq SpecDecl where
@@ -93,7 +88,7 @@ funDeclBody = lens getFunBody setFunBody
 
 
 instance Show FunDecl where
-    show (Fun f args e t) = Prelude.unlines [ show f ++ " :: " ++ show (varTy f)
+    show (Fun f args e _) = Prelude.unlines [ show f ++ " :: " ++ show (varTy f)
                                             , show f ++ " " ++ show args ++ " = " ++ show e
                                             ]
 
@@ -111,14 +106,14 @@ instance Show ValDecl where
 
 
 valVar :: Lens ValDecl ValDecl Variable Variable
-valVar = lens get set
-    where get (Val v _) = v
-          set (Val _ e) v = Val v e
+valVar = lens g s
+    where g (Val v _) = v
+          s (Val _ e) v = Val v e
 
 valExp :: Lens ValDecl ValDecl PE.PreExpr PE.PreExpr
-valExp = lens get set
-    where get (Val _ e) = e
-          set (Val v _) e = Val v e
+valExp = lens g s
+    where g (Val _ e) = e
+          s (Val v _) e = Val v e
     
 instance Eq ValDecl where
     (Val v _) == (Val v' _) = v == v'
@@ -228,13 +223,17 @@ instance Decl TypeDecl where
     getFocusProof _ = Nothing
     createHypDecl _ = Nothing
 
+sameDecl :: (Decl d,Decl d') => d' -> d -> Bool
+sameDecl d d' = getNameDecl d == getNameDecl d'
+
+
 isPrg :: PE.PreExpr -> Bool
 isPrg (PE.Quant _ _ _ _) = False
 isPrg (PE.PrExHole _) = False
-isPrg (PE.UnOp op pe) = isPrg pe
-isPrg (PE.BinOp op pe pe') = isPrg pe && isPrg pe'
+isPrg (PE.UnOp _ pe) = isPrg pe
+isPrg (PE.BinOp _ pe pe') = isPrg pe && isPrg pe'
 isPrg (PE.App pe pe') = isPrg pe && isPrg pe'
 isPrg (PE.If c e1 e2) = isPrg c && isPrg e1 && isPrg e2
-isPrg (PE.Case e patterns) = isPrg e && all (\(p,e) -> isPrg p && isPrg e) patterns
+isPrg (PE.Case e patterns) = isPrg e && all (uncurry (&&) . over both isPrg) patterns
 isPrg (PE.Paren pe) = isPrg pe
 isPrg _ = True

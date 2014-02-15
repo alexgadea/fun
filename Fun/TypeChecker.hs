@@ -2,7 +2,6 @@
 -- | Chequeo de tipos para un módulo. Inspirado en ``Typing Haskell in Haskell''.
 module Fun.TypeChecker where
 
-import Fun.TypeChecker.CallGraph
 import Fun.TypeChecker.Expr
 import Fun.TypeChecker.Proof
 import Fun.Module
@@ -20,7 +19,6 @@ import Data.Map (Map,fromList,delete,empty)
 import qualified Data.Map as M
 import Control.Monad.Trans.State
 import Control.Monad(replicateM)
-import Data.Foldable (foldrM)
 import Control.Monad(when)
 import Data.Maybe(isNothing)
 import Control.Lens hiding (rewrite)
@@ -38,12 +36,12 @@ checkFunDecl :: FunDecl -> TIMonad (VarName,PreExpr)
 checkFunDecl (Fun fun args body _) = tcCheckDecl fun args body 
 
 checkVal :: Annot ValDecl -> TIMonad (Annot ValDecl)
-checkVal (pos,(Val var expr)) = checkWithEnv M.empty expr >>= \t ->
-                          getType (varTy var) >>= \t' ->
-                          unifyS t t' >>
-                          rewriteS t >>= \t'' ->
-                          updAss' >> 
-                          setTypeS expr >>= \e -> return $ (pos,Val (setVarType t'' var) e)
+checkVal (pos,(Val v expr)) = checkWithEnv M.empty expr >>= \t ->
+                              getType (varTy v) >>= \t' ->
+                              unifyS t t' >>
+                              rewriteS t >>= \t'' ->
+                              updAss' >> 
+                              setTypeS expr >>= \e -> return $ (pos,Val (setVarType t'' v) e)
     where getType TyUnknown = getFreshTyVar
           getType t = return t
 
@@ -64,24 +62,26 @@ tcCheckThm (pos,(Thm t)) = mkCtxVar (getPreExpr . thExpr $ t) >>
                            return (pos,Thm (updThmPrf p' (updThmExp e t)))
 
 checkDeriv :: DerivDecl -> TIMonad ()
-checkDeriv (Deriv f n prfs) = return ()
+checkDeriv (Deriv _ _ _) = return ()
 
 checkTypedDecl :: Variable -> [Variable] -> PreExpr -> TIMonad (VarName,PreExpr)
 checkTypedDecl fun args body = do ass <- use funcs
                                   let t = M.lookup (varName fun) ass 
                                   when (isNothing t) (throwError $ "Función que no está en la lista de suposiciones")
-                                  let (Just (ty:_)) = t
+                                  let (Just ts) = t
+                                  when (null ts) (throwError $ "Función que está en la lista, sin tipo!")
+                                  let ty = head ts
                                   if arity ty /= length args
                                   then throwError $ "Unexpected number of arguments: " ++ show ty ++ " <> " ++ show args
                                   else do 
                                     let argsTy = argsTypes ty
-                                    let varsTy = fromList $ (varName fun,ty): zipWith (\v t -> (varName v,t)) args argsTy
+                                    let varsTy = fromList $ (varName fun,ty): zipWith (\v t' -> (varName v,t')) args argsTy
                                     ty' <- checkWithEnv varsTy body
-                                    s' <- unifyS ty (exponential ty' argsTy)
+                                    _ <- unifyS ty (exponential ty' argsTy)
                                     body' <- setTypeS body
-                                    localState args
+                                    _ <- localState args
                                     ass' <- use (ctx . vars)
-                                    updAss (M.union ass ass')
+                                    _ <- updAss (M.union ass ass')
                                     return (varName fun,body')
 
 addAssumption :: (Variable,[Variable]) -> TIMonad ()
@@ -93,12 +93,12 @@ addAssumption (f,args) = use funcs >>= \ass ->
                               updAss $ M.insert (varName f) [exponential tr ts] ass
 
 tcCheckModule :: Module -> [(VarName,[Type])] -> TIMonad Module
-tcCheckModule m a = do let decls = m ^. validDecls
-                       let fs   = bare functions decls
-                       let sps  = bare specs decls
-                       let vls  = decls ^. vals 
-                       let thms = decls ^. theorems
-                       let prps = decls ^. props
+tcCheckModule m a = do let dcls = m ^. validDecls
+                       let fs   = bare functions dcls
+                       let sps  = bare specs dcls
+                       let vls  = dcls ^. vals 
+                       let thms = dcls ^. theorems
+                       let prps = dcls ^. props
                        let env  = map (\f -> (f ^. funDeclName,f ^. funDeclArgs)) fs
                                ++ map (\f -> (f ^. specName,f ^. specArgs)) sps
 
@@ -111,10 +111,10 @@ tcCheckModule m a = do let decls = m ^. validDecls
                        thms' <- mapM tcCheckThm thms
                        prps' <- mapM tcCheckProp prps
 
-                       env <- use funcs 
+                       env' <- use funcs 
 
-                       return $ execState (do validDecls . functions %= updFunTypes fbds env ;
-                                              validDecls . specs  %= updSpecTypes sbds env    ;
+                       return $ execState (do validDecls . functions %= updFunTypes fbds env' ;
+                                              validDecls . specs  %= updSpecTypes sbds env'    ;
                                               validDecls . vals  .= vls'                     ;
                                               validDecls . theorems .= thms';
                                               validDecls . props .= prps';

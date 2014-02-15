@@ -19,11 +19,7 @@ import Equ.TypeChecker.Unification
 
 import qualified Data.Map as M
 import qualified Data.Text as T
-import qualified Data.Sequence as S
-import qualified Data.Foldable as F
-import Data.Function(on)
 import qualified Data.Set as Set (elems)
-import Control.Monad.Trans.Either (runEitherT, hoistEither)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State
 import Control.Lens hiding (rewrite,cons)
@@ -128,134 +124,135 @@ removeVar c v = (vars %~ M.delete (tRepr v) $ c , M.findWithDefault [] vn vs)
     where vn = tRepr v
           vs = c ^. vars
 
--- -- | Chequeo de diferentes elementos sint&#225;cticos simples como
--- -- variables, constantes, s&#237;mbolos de funci&#243;n y operadores.
---checkSyn :: (Syntactic s,Ord k) => s -> (s -> k) -> (TCCtx -> M.Map k [Type]) -> TyState Type
-checkSyn s name getM = use (ctx . getM) >>= \ct ->
-                       case M.lookup (name s) ct of
-                         Nothing -> tyerr $ ErrClashTypes s []
-                         Just ts -> rewriteS (head ts)
+-- | Chequeo de diferentes elementos sint&#225;cticos simples como
+-- variables, constantes, s&#237;mbolos de funci&#243;n y operadores.
+checkSyn :: (Ord k, Syntactic s) => s -> (s -> k) ->
+            ((CtxSyn k -> Accessor (CtxSyn k) (CtxSyn k))
+                -> TCCtx -> Accessor (CtxSyn k) TCCtx)
+              -> TyState Type
+checkSyn s name getM = use (ctx . getM) >>= withTypes s . M.lookup (name s)
 
--- -- | Las diferentes instancias de checkSyn.
--- checkVar :: -- Syntactic s => s -> TyState Type
-checkVar v = use (ctx . vars) >>= \ctx ->
-             case M.lookup (varName v) ctx of
-               Nothing -> use funcs >>= \ass ->
-                          case M.lookup (varName v) ass of
-                            Nothing -> tyerr $ ErrClashTypes v [] -- error "Ahhh"
-                            Just [] -> tyerr $ ErrClashTypes v []
-                            Just ts -> rewriteS (head ts)
-               Just [] -> tyerr $ ErrClashTypes v []
+errSynNoType :: (Syntactic s) => s -> TyState a
+errSynNoType = tyerr . ErrNoType
+
+withTypes :: (Syntactic s) => s -> Maybe [Type] -> TyState Type
+withTypes s Nothing = errSynNoType s
+withTypes s (Just []) = errSynNoType s
+withTypes _ (Just ts) = rewriteS $ head ts
+
+-- | Las diferentes instancias de checkSyn.
+checkVar :: Variable -> TyState Type
+checkVar v = use (ctx . vars) >>= \ct ->
+             case M.lookup (varName v) ct of
+               Nothing -> use funcs >>= withTypes v . M.lookup (varName v)
+               Just [] -> errSynNoType v
                Just ts -> rewriteS (head ts)
+               
 checkCon :: Constant -> TyState Type
 checkCon c = checkSyn c conName cons
 checkOp :: Operator -> TyState Type
-checkOp op = checkSyn op opName ops
+checkOp o = checkSyn o opName ops
 checkQuant :: Quantifier -> TyState Type
 checkQuant q = checkSyn q quantName quants
 
 -- -- | Actualiza los tipos en el contexto.
 updateCtx :: TCCtx -> TySubst -> TCCtx
-updateCtx ctx subst = execState (do vars %= M.map (map (rewrite subst));
-                                    ops  %= M.map (map (rewrite subst));
-                                    cons %= M.map (map (rewrite subst))) ctx
-
+updateCtx ct subs = execState (do vars %= apSubs ;
+                                  ops  %= apSubs ;
+                                  cons %= apSubs ) ct
+          where apSubs = M.map $ map (rewrite subs)
+          
 updateCtxS :: TySubst -> TyState ()
 updateCtxS = modCtx . flip updateCtx
 
 -- Lifting de unificación para la mónada de TC
 unifyS :: Type -> Type -> TyState TySubst
-unifyS t t' = getSub >>= \s ->
-              case unify t t' s of
-                Left err -> tyerr err
-                Right s' -> modSubst (const s') >> return s'                
+unifyS t t' = getSub >>= either tyerr (\s -> modSubst (const s) >> return s) . unify t t'
 
+unifyListS :: [Type] -> TyState TySubst
 unifyListS [] = getSub
-unifyListS [t] = getSub
+unifyListS [_] = getSub
 unifyListS (t:t':ts) = unifyS t t' >> unifyListS (t':ts)
 
 rewriteS :: Type -> TyState Type
 rewriteS t = flip rewrite t <$> getSub
 
 updAss :: M.Map VarName [Type] -> TIMonad ()
-updAss ass = getSub >>= \subst -> 
-             funcs .= M.map (map (rewrite subst)) ass >>
-             updateCtxS subst
+updAss ass = getSub >>= \subs -> 
+             funcs .= M.map (map (rewrite subs)) ass >>
+             updateCtxS subs
 
 updAss' :: TIMonad ()
-updAss' = getSub >>= \subst -> 
-          funcs %= M.map (map (rewrite subst)) >>
-          updateCtxS subst
+updAss' = getSub >>= \subs -> 
+          funcs %= M.map (map (rewrite subs)) >>
+          updateCtxS subs
 
 check :: PreExpr -> TyState Type
 check (Var v) = checkVar v
 check (Con c) = checkCon c 
 check (PrExHole h) = return (tType h)
 check (Paren e) = check e
-check (UnOp op e) = do t <- check e 
-                       t' <- checkOp op
-                       w <- getFreshTyVar 
-                       unifyS t' (t :-> w) 
-                       rewriteS w
-check (BinOp op e e') = do te <- check e 
-                           te' <- check e'
-                           tOp <- checkOp op
-                           w <- getFreshTyVar
-                           unifyS (te :-> te' :-> w) tOp
-                           rewriteS w
+check (UnOp o e) = do t  <- check e 
+                      t' <- checkOp o
+                      w  <- getFreshTyVar 
+                      _  <- unifyS t' (t :-> w) 
+                      rewriteS w
+check (BinOp o e e') = do te <- check e 
+                          te' <- check e'
+                          tOp <- checkOp o
+                          w <- getFreshTyVar
+                          _ <- unifyS (te :-> te' :-> w) tOp
+                          rewriteS w
 check (App e e') = do te <- check e
                       te' <- check e' 
                       w <- getFreshTyVar
-                      unifyS  te (te' :-> w) 
+                      _ <- unifyS  te (te' :-> w) 
                       rewriteS w
 check (Quant q v r t) = do tyQ <- checkQuant q
-                           ctx <- getCtx 
                            tyV <- getFreshTyVar
-                           extCtxV v tyV
+                           _ <- extCtxV v tyV
                            tyR <- check r
                            tyT <- check t
                            case tyQ of 
                              t1 :-> t2 -> do
-                                 s <- unifyS tyV t1
-                                 s' <- unifyS t2 tyT
-                                 unifyS tyR tyBool
+                                 _ <- unifyS tyV t1
+                                 _ <- unifyS t2 tyT
+                                 _ <- unifyS tyR tyBool
                                  rewriteS tyT
                              t1 -> tyerr $ ErrNotExpected (tyV :-> tyT) t1
 check (If b t f) = do tb <- check b
-                      unifyS tb  (TyAtom ATyBool)
+                      _ <- unifyS tb  (TyAtom ATyBool)
                       tt <- check t
                       tf <- check f
-                      unifyS tt tf
+                      _ <- unifyS tt tf
                       rewriteS tt
                                      
 check (Case e cs) = do texp <- check e
                        pats <- mapM checkCase cs
-                       unifyListS (texp:map fst pats)
-                       unifyListS (map snd pats) 
+                       _ <- unifyListS (texp:map fst pats)
+                       _ <- unifyListS (map snd pats) 
                        rewriteS (snd (head pats))
 
 
 -- | Devuelve el tipo de un patrón y de la expresión.
 checkCase :: (PreExpr,PreExpr) -> TyState ((Type,Type))
-checkCase (pat,exp) = do tpat <- checkPat pat
-                         texp <- check exp
-                         return (tpat,texp)
-
+checkCase (p,e) = checkPat p >>= \tp ->
+                  check e >>= \te -> return (tp,te)
 
 checkPat :: PreExpr -> TyState Type
 checkPat (Var v) = getFreshTyVar >>= \w -> extCtxV v w >> return w
 checkPat (Con c) = checkCon c
-checkPat (UnOp op e) = checkOp op >>= \t ->
-                       checkPat e >>= \t'->
-                       getFreshTyVar >>= \w ->
-                       unifyS t (t' :-> w) >>
-                       rewriteS w
-checkPat (BinOp op e e') = checkOp op >>= \t ->
-                           checkPat e >>= \t' ->
-                           checkPat e' >>= \t'' ->
-                           getFreshTyVar >>= \w ->
-                           unifyS t (t' :-> t'' :-> w) >>
-                           rewriteS w
+checkPat (UnOp o e) = checkOp o >>= \t ->
+                      checkPat e >>= \t'->
+                      getFreshTyVar >>= \w ->
+                      unifyS t (t' :-> w) >>
+                      rewriteS w
+checkPat (BinOp o e e') = checkOp o >>= \t ->
+                          checkPat e >>= \t' ->
+                          checkPat e' >>= \t'' ->
+                          getFreshTyVar >>= \w ->
+                          unifyS t (t' :-> t'' :-> w) >>
+                          rewriteS w
 checkPat (Paren p) = checkPat p
 checkPat _ = error "Expression is not a pattern."
 
@@ -266,6 +263,7 @@ initCtx = TCCtx { _vars = M.empty
                 , _quants = M.empty
                 }
 
+initTCState :: TCState
 initTCState = TCState { _subst = emptySubst
                       , _ctx = initCtx
                       , _fTyVar = 0
@@ -281,7 +279,7 @@ mkCtxVar e = mapM_ updCtx vs
 
 mkCtxOps :: PreExpr -> TyState ()
 mkCtxOps = mapM_ updCtx . getOperators
-    where updCtx op = renTy M.empty (opTy op) >>= extCtxOp op . fst
+    where updCtx o = renTy M.empty (opTy o) >>= extCtxOp o . fst
 
 mkCtxCon :: PreExpr -> TyState ()
 mkCtxCon = mapM_ updCtx . getConstants
@@ -305,24 +303,28 @@ renTy s (t :-> t') = renTy s t >>= \(t1,s') ->
 
 -- | Genera variables de tipos únicos para operadores, constantes y cuantificadores.
 renTyVar :: (s -> Type) -> (s -> Type -> s) -> s -> TyState s
-renTyVar get upd s = renTy M.empty (get s) >>= return . upd s . fst
+renTyVar acc upd s = renTy M.empty (acc s) >>= return . upd s . fst
 
+renTyCon :: Constant -> TyState Constant
 renTyCon = renTyVar conTy (\c t -> c {conTy = t})
+
+renTyOp :: Operator -> TyState Operator
 renTyOp = renTyVar opTy  (\o t -> o {opTy = t})
 
 initCtxE :: PreExpr -> TyState ()
 initCtxE e = mkCtxOps e >> mkCtxCon e >> mkCtxQuan e
 
 mkSubst :: TCCtx -> ((Variable -> Type), (Constant -> Type), (Operator -> Type))
-mkSubst (TCCtx vars ops cons _) = (upd varName vars,upd conName cons,upd opName ops)
-    where upd field = M.foldrWithKey (\vname ty f var -> if field var == vname then head ty else f var) tyUnk
-          tyUnk _ = TyUnknown
+mkSubst (TCCtx vs os cs _) = (upd varName vs,upd conName cs,upd opName os)
+    where upd field = M.foldrWithKey (\vname ty f v -> if field v == vname then head ty else f v) tyUnk
+          tyUnk = const TyUnknown
 
 setType' :: TCCtx -> PreExpr -> PreExpr
-setType' ctx e = setType v c o e
-    where (v,c,o) = mkSubst ctx 
+setType' ct e = setType v c o e
+    where (v,c,o) = mkSubst ct
 
 checkWithEnv :: M.Map VarName Type -> PreExpr -> TyState Type
 checkWithEnv env e = initCtxE e >> mapM_ (uncurry extCtxVar) (M.toList env) >> check e
 
+setTypeS :: PreExpr -> TyState PreExpr
 setTypeS e = use ctx >>= return . flip setType' e

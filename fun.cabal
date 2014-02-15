@@ -41,8 +41,7 @@ Library
                             Fun.Theory,
                             Fun.TypeChecker
 
-    Other-modules:          Fun.TypeChecker.CallGraph,
-                            Fun.TypeChecker.Expr
+    Other-modules:          Fun.TypeChecker.Expr
                             Fun.TypeChecker.Proof
 
     Build-depends:          base >= 4.2, text >= 0.11.1.5, 

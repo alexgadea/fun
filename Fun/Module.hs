@@ -19,6 +19,9 @@ data InvalidDeclsAndVerifs =
                               }
     deriving Show
 
+emptyInDeclsVerifs :: InvalidDeclsAndVerifs
+emptyInDeclsVerifs = InvalidDeclsAndVerifs emptyInDecls []
+
 
 data Import = Import ModName
     deriving (Eq, Show)
@@ -34,6 +37,9 @@ data Module = Module { _modName       :: ModName
 
 
 $(makeLenses ''Module)
+
+imName :: Lens' Import ModName
+imName = lens (\(Import m) -> m) (\_ -> Import ) 
 
 instance Eq Module where
     (==) = (==) `on` (^. modName)

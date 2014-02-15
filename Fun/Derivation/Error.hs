@@ -16,9 +16,9 @@ data DerivationError =   InvalidVariable Variable
     deriving Eq
 
 instance Show DerivationError where
-    show (InvalidVariable var) = 
-            "La variable de la derivación debe ser la misma que en la especificación y "++
-             "debe estar bien tipada "
+    show (InvalidVariable _) = 
+           "La variable de la derivación debe ser la misma que en la especificación"
+           ++ "y debe estar bien tipada "
     show NotSpecification = "No existe la especificación correspondiente a esta derivación"
     show (RedefinedDerivation v) = "Ya hay una derivación de la función "++show v
     show (ProofNotValid perror) = "Error en la prueba de la derivación: "++ show perror 

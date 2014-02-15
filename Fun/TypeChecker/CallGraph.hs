@@ -2,12 +2,9 @@
 module Fun.TypeChecker.CallGraph (mutualBlocks)
     where
 
-import Fun.Decl
-
 import Equ.PreExpr
 
 import Data.Graph.Inductive
-import Data.Graph.Inductive.Query.DFS
 
 import Data.List
 import Control.Monad.Trans.State
@@ -24,12 +21,12 @@ data GrConstr = GrConstr { _idx :: Int
                          }
 $(makeLenses ''GrConstr)
 
-
+initGrConstr :: GrConstr
 initGrConstr = GrConstr 0 []
 
 mkCallGraph :: [(Variable,[Variable],PreExpr)] -> CallGraph
-mkCallGraph fs = let (edges,st) = runState (mapM go fs) initGrConstr
-                 in mkGraph (st ^. nds) (concat edges)
+mkCallGraph fs = let (es,st) = runState (mapM go fs) initGrConstr
+                 in mkGraph (st ^. nds) (concat es)
     where go (f,args,body) = addNode f >> addEdges f args body
 
 
@@ -54,8 +51,8 @@ addEdges :: Variable -> [Variable] -> PreExpr -> State GrConstr [UEdge]
 addEdges f args body = mapM (addEdge f) $ getCalledVars body \\ args
 
 connectedCalls :: CallGraph -> [[Variable]]
-connectedCalls gr = map (map getNode) $ scc gr
-    where getNode n = maybe (error "IMPOSSIBLE") id $ lookup n (labNodes gr)
+connectedCalls gr = map (map getN) $ scc gr
+    where getN n = maybe (error "IMPOSSIBLE") id $ lookup n (labNodes gr)
 
 mutualBlocks' :: [(Variable,[Variable],PreExpr)] -> [[Variable]]
 mutualBlocks' = connectedCalls . mkCallGraph

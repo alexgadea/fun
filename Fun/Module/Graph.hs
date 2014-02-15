@@ -5,11 +5,9 @@ module Fun.Module.Graph where
 import Fun.Module
 
 import Data.Graph.Inductive
-import Data.Graph.Inductive.Graph
-import Data.Graph.Inductive.Query.DFS
 import Data.Maybe (fromJust)
 import Data.Tuple (swap)
-import Data.List (zip3,replicate,nub)
+import Data.List (nub)
 
 import Control.Lens
 
@@ -27,7 +25,7 @@ insModuleImports m imMGraph =
         mImNames' :: [ModName]
         mImNames' = filter (`notElem` map snd (labNodes imMGraph)) (nub $ m ^. modName : mImNames)
         mImNames :: [ModName]
-        mImNames = map (\(Import m) -> m) $ m ^. imports
+        mImNames = map (^. imName) $ m ^. imports
         mImNodes :: [LNode ModName]
         mImNodes = mkNodes_ (fromGraph imMGraph) mImNames'
         numImports :: Int

@@ -30,7 +30,7 @@ instance Show ModuleError where
         "No existe el archivo correspondiente a este nombre de módulo: " ++ unpack t
     show (ModuleCycleImport (mn:mns)) = 
         unlines [ "Import ciclico:\n\tbegin in -> " ++ show (unpack mn)
-                , foldr (\mn s -> s ++ "\n\timport -> " ++ show (unpack mn)) "" (init mns)
+                , foldr (\mn' s -> s ++ "\n\timport -> " ++ show (unpack mn')) "" (init mns)
                 , "\tend in -> " ++ show (last mns)
                 ]
     show m = unlines [ "\n=============ErrorsInModule=========="

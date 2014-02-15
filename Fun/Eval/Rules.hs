@@ -1,5 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Fun.Eval.Rules where
+module Fun.Eval.Rules ( EvalRule
+                      , binOpRules
+                      , unOpRules
+                      , ifRules
+                      , matchRule
+                      , matchRules
+                      , matchRuleTrace
+                      , matchRulesTrace
+                      ) where
 
 import Equ.Theories.Arith
 import Equ.Theories.FOL
@@ -9,11 +17,9 @@ import Equ.PreExpr
 import Equ.Types
 import Equ.Matching
 
-import Data.Text(Text(..))
 import Data.Maybe(catMaybes)
 import Control.Monad
 
-import System.IO.Unsafe(unsafePerformIO)
 
 import Prelude hiding(pred,sum,length,concat,take,drop,and,or)
 
@@ -30,6 +36,7 @@ instance Show EvalRule where
     show = name
 
 -- | Clasificamos las reglas según la forma de las expresiones
+binOpRules :: [EvalRule]
 binOpRules = [ePlusZero,ePlusSucc,eProdZero,eProdSucc,eMinZero,eMinSucc,
               eAndTrue,eAndFalse,eOrTrue,eOrFalse,eImplTrue,
               eImplFalse,eConsecTrue,eConsecFalse,eEquivTrue,eEquivFalse,
@@ -38,10 +45,12 @@ binOpRules = [ePlusZero,ePlusSucc,eProdZero,eProdSucc,eMinZero,eMinSucc,
               eIndexZero,eIndexSucc,eTakeEmpty,eTakeZero,eTakeSucc,
               eDropEmpty,eDropZero,eDropSucc]
 
+unOpRules :: [EvalRule]
 unOpRules = [ePredSucc,
              eNegTrue,eNegFalse,
              eLongEmpty,eLongNotEmpty]
 
+ifRules :: [EvalRule]
 ifRules = [eIfTrue,eIfFalse]
 
 -- | Dada una expresión e y una regla r, realiza matching entre la expresión
@@ -81,7 +90,7 @@ matchRules' e rs f = return (catMaybes $ map (f e) rs) >>=
                                 (l:_) -> return l
                               
 -- Variables para las reglas:
-
+varZ1,varZ2,varZ3 :: Expr
 varZ1 = Expr $ Var $ var "z1" $ TyVar "A"
 varZ2 = Expr $ Var $ var "z2" $ TyVar "A"
 varZ3 = Expr $ Var $ var "z3" $ TyVar "A"

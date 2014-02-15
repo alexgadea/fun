@@ -7,27 +7,22 @@ module Fun.FunTheories.List(
 import qualified Equ.Theories.Arith as EquArith
 import qualified Equ.Theories.List as EquList
 import qualified Equ.Theories as EquTh
-import Equ.PreExpr.Symbols(tyListVar)
 import Equ.PreExpr
 import Equ.Types
-import Equ.Syntax
+import Equ.Proof (Theorem,Axiom)
 
-import Equ.IndType
+
 import Equ.IndTypes(list)
 import Fun.Theory
 import Fun.FunTheories.Arith
 import Fun.Decl
 
-import Data.Maybe(fromJust)
-import Data.Text hiding (map)
-
-
-
+varN,varT,varX,varXS,varYS :: Variable
 varN = var "n" (TyAtom ATyNat)
 varT = var "t" (TyAtom ATyNat)
-varX = var "x" (tyVar "A")
-varXS = var "xs" (tyListVar "A")
-varYS = var "ys" (tyListVar "A")
+varX = var "x" (TyVar "A")
+varXS = var "xs" (TyList $ TyVar "A")
+varYS = var "ys" (TyList $ TyVar "A")
               
               
               
@@ -36,8 +31,8 @@ varYS = var "ys" (tyListVar "A")
                                 0 -> x
                                 (succ t) -> index t xs
                         -}
-listIndex :: (Operator,[Variable],PreExpr)
-listIndex = (EquList.listIndex,[varN,varYS],exprListIndex)
+listIndex :: OpDecl 
+listIndex = OpDecl EquList.listIndex [varN,varYS] exprListIndex
     where 
         exprListIndex :: PreExpr
         exprListIndex = Case (Var varYS) 
@@ -59,8 +54,7 @@ listLength = OpDecl EquList.listLength [varYS] lenFun
                    [ (Con EquList.listEmpty,Con EquArith.natZero)
                    , (cons (Var varX) (Var varXS),suc (UnOp EquList.listLength (Var varXS)))
                    ]          
-          varX = var "x" $ TyVar "A"
-          varXS = var "xs" $ TyList $ TyVar "A"
+
           suc = UnOp EquArith.natSucc
           cons = BinOp EquList.listApp
 
@@ -76,19 +70,20 @@ listLength = OpDecl EquList.listLength [varYS] lenFun
 -- FALTA DEFINIR EL RESTO DE LOS OPERADORES.
                             
 
-listOperators = [ EquList.listIndex, EquList.listConcat, EquList.listLength
-                , EquList.listTake, EquList.listDrop]
-                
+listQuantifiers :: [Quantifier]                
 listQuantifiers = EquList.theoryQuantifiersList
 
+listAxioms :: [Axiom]
 listAxioms = EquTh.listAxioms
 
+listTheorems :: [Theorem]
 listTheorems = []
 
+listTheory :: Theory
 listTheory = Theory {
              tname = "Listas"
            , indType = [list,natural]
-           , operators = [listLength]
+           , operators = [listLength,listIndex]
            , quantifiers = listQuantifiers
            , axioms = listAxioms
            , theorytheorems = listTheorems

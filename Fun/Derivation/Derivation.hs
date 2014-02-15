@@ -4,6 +4,10 @@ import Fun.Decl
 import Fun.Derivation.Error
 import Fun.Decl.Error
 
+import Data.Monoid
+
+-- import Control.Lens
+
 -- | Una derivación contiene una especificación, un programa y la prueba
 --   de que ambos son equivalentes.
 data Derivation = Derivation { deriv :: DerivDecl
@@ -14,14 +18,20 @@ data Derivation = Derivation { deriv :: DerivDecl
     deriving Eq
 
 instance Show Derivation where
-    show d = "\n\nDerivación\nSpec: " ++ show (spec d) ++
-             "\nDeriv: " ++ show (deriv d) ++
-             "\nProg: " ++ show (prog d)
-             
-             
+    show d = unlines [ "Derivación\nSpec: " ++ show (spec d) 
+                     , "Deriv: " ++ show (deriv d)
+                     , "Prog: " ++ show (prog d)
+                     ]
+
 type EDeriv' a = Either ([DerivationError], DerivDecl) a
 type EDeriv = EDeriv' Derivation
              
 whenDer :: Bool -> ([DerivationError],DerivDecl) -> EDeriv' ()
 whenDer b e | b = return ()
             | otherwise = Left e
+
+instance (Monoid m) => Monoid (Either a m) where
+  mempty = Right mempty
+  mappend (Left e) _ = Left e
+  mappend _ (Left e) = Left e
+  mappend (Right a) (Right a') = Right (a `mappend` a')

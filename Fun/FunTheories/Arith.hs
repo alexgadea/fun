@@ -6,23 +6,17 @@ module Fun.FunTheories.Arith(
 
 import qualified Equ.Theories.Arith as EquArith
 import qualified Equ.Theories as EquTh
-import Equ.PreExpr.Symbols(tyListVar)
+import Equ.Proof(Axiom,Theorem)
 import Equ.PreExpr
 import Equ.Types
-import Equ.Syntax
 
-import Equ.IndType
 import Equ.IndTypes(natural)
 import Fun.Theory
 import Fun.Decl
 
-import Data.Maybe(fromJust)
-import Data.Text hiding (map)
-
-
 
 {- ARITMETICA -}
-
+varN,varM,varT :: Variable
 varN = var "n" (TyAtom ATyNat)
 varM = var "m" (TyAtom ATyNat)
 varT = var "t" (TyAtom ATyNat)
@@ -60,13 +54,16 @@ natProdExpr = Case (Var varN) [ (Con EquArith.natZero,
 natProd :: OpDecl
 natProd = OpDecl EquArith.natProd [varN,varM] natProdExpr
 
-
+arithOperators :: [OpDecl]
 arithOperators = [natSum,natProd]
 
+arithQuantifiers :: [Quantifier]
 arithQuantifiers = EquArith.theoryQuantifiersList
 
+arithAxioms :: [Axiom]
 arithAxioms = EquTh.arithAxioms
 
+arithTheorems :: [Theorem]
 arithTheorems = []
 
 arithTheory :: Theory

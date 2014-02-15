@@ -10,12 +10,9 @@ import Text.Parsec.Language
 import Data.Functor.Identity
 
 -- Imports Data.*
-import qualified Data.Map as M (Map)
 import Data.Text (Text)
 
 -- Imports Equ.
-import Equ.Types(Type)
-import Equ.Syntax(VarName,FuncName)
 import qualified Equ.Parser as EquP ( PProofState, PExprState
                                     , PExprStateClass (..)
                                     , PProofStateClass(..)
@@ -23,6 +20,10 @@ import qualified Equ.Parser as EquP ( PProofState, PExprState
 
 -- Imports Fun.
 import Fun.Declarations
+import Fun.Decl.Error (DeclPos(..))
+import Fun.Module
+
+import Control.Lens
 
 type TextFilePath = Text
 
@@ -30,6 +31,9 @@ data PDeclState = PDeclState { pDecls :: Declarations
                              , pExprs :: EquP.PExprState
                              , pProofs :: EquP.PProofState
                              }
+
+pdcls :: Lens' PDeclState Declarations
+pdcls = lens pDecls (\st d -> st {pDecls = d})
                              
 instance EquP.PExprStateClass PDeclState where
     getExprState = pExprs
@@ -116,17 +120,28 @@ lineComment :: ParserD ()
 lineComment = try $ symbol lexer "--" >> manyTill anyChar newline >> return ()
 
 blockComment :: ParserD ()
-blockComment = try $ do 
-                symbol lexer "{-"
-                manyTill anyChar endIn
+blockComment = try $ do
+                _ <- symbol lexer "{-"
+                _ <- manyTill anyChar endIn
                 return ()
     where
-        endIn = (try eof >> error "Esperando -}")
-             <|> try (symbol lexer "-}")
+        endIn = (try eof >> error "Esperando -}") <|> try (symbol lexer "-}")
 
 manyTillWithEnd :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m end -> 
                    ParsecT s u m ([a],end)
-manyTillWithEnd p end = scan
+manyTillWithEnd p ending = scan
     where
-        scan =  do{e <- end; return ([],e) }
+        scan =  do{ e <- ending; return ([],e) }
             <|> do{ x <- p; xs <- scan; return (x:fst xs,snd xs)}
+
+currPos :: ParserD SourcePos
+currPos = getParserState >>= return . statePos
+
+position :: ModName -> SourcePos -> ParserD DeclPos
+position m b = currPos >>= \e -> return (DeclPos b e m)
+
+parseWithPos :: ModName -> ParserD a -> ParserD (Annot a)
+parseWithPos m p = currPos >>= \b ->
+                   p >>= \a ->
+                   position m b >>= \pos -> 
+                   return (pos,a)

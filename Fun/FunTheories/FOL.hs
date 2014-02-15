@@ -6,24 +6,17 @@ module Fun.FunTheories.FOL(
 
 import qualified Equ.Theories.FOL as EquFOL
 import qualified Equ.Theories as EquTh
-import Equ.PreExpr.Symbols(tyListVar)
 import Equ.PreExpr
+import Equ.Proof (Theorem,Axiom)
 import Equ.Types
-import Equ.Syntax
 
-import Equ.IndType
-import Equ.IndTypes(bool)
+import Equ.IndTypes (bool)
 import Fun.Theory
 import Fun.Decl
 
-import Data.Maybe(fromJust)
-import Data.Text hiding (map)
-
-
-
 {- Lógica -}
 
-
+varP,varQ :: Variable
 varP = var "p" (TyAtom ATyBool)
 varQ = var "q" (TyAtom ATyBool)
 
@@ -54,15 +47,16 @@ folAndExpr = Case (Var varP) [ (Con EquFOL.folFalse, Con EquFOL.folFalse)
 folAnd :: OpDecl
 folAnd = OpDecl EquFOL.folAnd [varP,varQ] folAndExpr
 
-
-boolOperators = EquFOL.theoryOperatorsList
-
+boolQuantifiers :: [Quantifier]
 boolQuantifiers = EquFOL.theoryQuantifiersList
 
+boolAxioms :: [Axiom]
 boolAxioms = EquTh.listAxioms
 
+boolTheorems :: [Theorem]
 boolTheorems = []
 
+folTheory :: Theory
 folTheory = Theory {
             tname = "Lógica"
           , indType = [bool]

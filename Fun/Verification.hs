@@ -12,25 +12,19 @@ import Fun.Declarations
 import Fun.Verification.Verification
 import Fun.Verification.Error
 
-import Equ.Expr
 import Equ.Proof
-import Equ.Rule
-import Equ.Theories
-import Equ.Theories.FOL 
 import qualified Equ.PreExpr as PE
 
-import Data.Text hiding (map,foldl)
 import Data.List as L (map, find)
-import Data.Either (rights)
 import Data.Maybe (fromJust,catMaybes)
 
-import Control.Lens
+-- import Control.Lens
 
 -- | Crea una verificación, esto es, una especificación de una función,
 -- la función y una prueba de corrección de que la función se derivo en
 -- base a la especificación.
 createVerifications:: Declarations -> Declarations -> [Verification]
-createVerifications decls imds = do
+createVerifications decls _ = do
                 let vSpecs = bare specs decls
                 let vFuns = bare functions decls
                 let vThm = bare theorems decls
@@ -38,10 +32,10 @@ createVerifications decls imds = do
                 catMaybes der
     where
         createVer :: [SpecDecl] -> [FunDecl] -> [ThmDecl] -> [Maybe Verification]
-        createVer specs funcs thms = 
+        createVer spcs funcs thms = 
             L.map (\s -> L.find (equalFun s) funcs >>= \f ->
                          L.find (equalThm f) thms >>= \(Thm theo) ->
-                        Just (Verification s f (thProof theo))) specs
+                        Just (Verification s f (thProof theo))) spcs
         equalFun :: SpecDecl -> FunDecl -> Bool
         equalFun s f = getFuncDecl s == getFuncDecl f &&
                        getVarsDecl s == getVarsDecl f
