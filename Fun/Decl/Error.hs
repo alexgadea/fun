@@ -28,10 +28,12 @@ data DeclError = NotInScopeVar Variable
                | InvalidPrgDeclaration
                | InvalidProofForThm ProofError
                | DuplicateName Text
+               | ArgDuplicated Text
     deriving Eq
     
 instance Show DeclError where
     show (NotInScopeVar v) = "Declaración " ++ show v ++ " fuera de alcance."
     show InvalidPrgDeclaration = "La función no declara un programa valido."
     show (InvalidProofForThm perr) = "Prueba invalida: " ++ show perr
-    show (DuplicateName t) = "Nombre duplicado " ++ unpack t
+    show (DuplicateName t) = "Nombre duplicado: " ++ unpack t
+    show (ArgDuplicated t) = "Argumento duplicado: " ++ unpack t

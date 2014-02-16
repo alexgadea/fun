@@ -1,4 +1,7 @@
 {-# Language TemplateHaskell, ViewPatterns #-}
+-- | Definición de los distintos tipos de declaraciones y de los chequeos
+-- asociados a cada uno de ellos.
+
 module Fun.Declarations where
 
 import Equ.Syntax hiding (Func)
@@ -185,17 +188,21 @@ checkDecl chk decls ann = mconcat [ chk (ann ^. _2) , checkDoubleDef ann ] decls
 -- todas las varibles estén declaradas.
 checkSpecs :: Declarations -> Declarations -> 
               [Either (ErrInDecl SpecDecl) SpecDecl]
-checkSpecs ds imds = checkDecls specs ds imds $ checkDecl checkDefVar
+checkSpecs ds imds = checkDecls specs ds imds $ \d -> mconcat [checkDecl checkDefVar d,chkDups]
+    where chkDups :: Annot SpecDecl -> [DeclError]
+          chkDups (_,Spec f vs _) = checkArgsNotDup (f:vs)
 
 -- | Chequeo de funciones; además del chequeo de variables,
 -- verificamos que el cuerpo sea un programa.
 checkFuns :: Declarations ->  Declarations -> 
              [Either (ErrInDecl FunDecl) FunDecl]
-checkFuns ds imds = checkDecls functions ds imds $ \d -> mconcat [checkDecl checkDefVar d, chkPrg]
+checkFuns ds imds = checkDecls functions ds imds $ \d -> mconcat [checkDecl checkDefVar d, chkPrg,chkDups]
     where
         chkPrg :: Annot FunDecl -> [DeclError]
         chkPrg (checkIsPrg . (^. _2) -> False) = [InvalidPrgDeclaration]
         chkPrg _  = []
+        chkDups :: Annot FunDecl -> [DeclError]
+        chkDups (_,Fun f vs _ _ ) = checkArgsNotDup (f:vs)
         
 -- | Chequeo de teoremas; además del chequeo de nombres duplicados,
 -- verificamos que la prueba sea correcta.
@@ -253,6 +260,15 @@ checkDefVar d ds = concatMap inScope . S.toList . PE.freeVars . getFocusDecl $ d
 checkDefVarVal :: ValDecl ->  Declarations -> [DeclError]
 checkDefVarVal d ds = checkDefVar d $ (vals  %~ L.filter ((d/=) . snd)) ds
 
+
+checkArgsNotDup :: [Variable] -> [DeclError]
+checkArgsNotDup = map (ArgDuplicated . varName) . getDups
+                where getDups = go S.empty S.empty
+                      go _ dups [] = S.toList dups
+                      go seen dups (x:xs) = go (x `S.insert` seen) dups' xs
+                         where dups' = if x `S.member` seen 
+                                       then (x `S.insert` dups) 
+                                       else dups
 
 getFocusDecl :: Decl d => d -> PE.PreExpr
 getFocusDecl = fromJust . getExprDecl 
