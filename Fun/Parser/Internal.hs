@@ -105,10 +105,14 @@ keywordRecursion :: ParserD ()
 keywordRecursion = keyword "recursion"
 keywordDefSymbol :: ParserD ()
 keywordDefSymbol = keyword defSymbol
+keywordAppSymbol :: ParserD ()
+keywordAppSymbol = string appSymbol >> return ()
 
 defSymbol :: String
 defSymbol = "="
 
+appSymbol :: String
+appSymbol = "."
 
 whites :: ParserD ()
 whites = whiteSpace lexer

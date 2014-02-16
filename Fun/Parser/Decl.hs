@@ -90,7 +90,8 @@ parseFun :: ModName -> ParserD ()
 parseFun mName = parseDecl mName (parseWithType parseFunUndec) functions
 
 parseFunUndec :: Variable -> ParserD FunDecl
-parseFunUndec fun = Fun fun <$> parseFunArgs
+parseFunUndec fun = Fun fun <$  keywordAppSymbol
+                            <*> parseFunArgs
                             <*  many (whites <|> tryNewline)
                             <*> parseExpr 
                             <*  many (whites <|> tryNewline)
@@ -100,13 +101,15 @@ parseSpec :: ModName -> ParserD ()
 parseSpec mName = parseDecl mName (parseWithType parseSpecUndec) specs
 
 parseSpecUndec :: Variable -> ParserD SpecDecl
-parseSpecUndec fun = Spec fun <$> parseFunArgs
+parseSpecUndec fun = Spec fun <$  keywordAppSymbol
+                              <*> parseFunArgs
                               <*  many (whites <|> tryNewline)
                               <*> parseExpr 
                               <*  keywordEnd
 
 parseFunArgs :: ParserD [Variable]
-parseFunArgs = manyTill parseVar (try $ string defSymbol)
+parseFunArgs = parseVar `sepBy` keywordAppSymbol >>= \vs ->
+               string defSymbol >> return vs
 
 parseTheoName :: ParserD (Maybe Text)
 parseTheoName = Just <$> (keywordVerified >> keywordFrom >> parseName)
