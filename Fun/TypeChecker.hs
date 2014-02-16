@@ -54,12 +54,15 @@ tcCheckProp ap@(_,Prop pn expr) = mkCtxVar expr >>
                                  return $ second (const $ Prop pn e) ap
 
 tcCheckThm :: Annot ThmDecl -> TIMonad (Annot ThmDecl)
-tcCheckThm (pos,(Thm t)) = mkCtxVar (getPreExpr . thExpr $ t) >>
-                           checkWithEnv M.empty (getPreExpr . thExpr $ t) >>= \ty ->
-                           unifyS ty (TyAtom ATyBool) >>
-                           setTypeS (getPreExpr . thExpr $ t) >>= \e ->
-                           chkProof (thProof t) >>= \ p' ->
-                           return (pos,Thm (updThmPrf p' (updThmExp e t)))
+tcCheckThm (pos,(Thm t e)) = mkCtxVar (getPreExpr . thExpr $ t) >>
+                             checkWithEnv M.empty (getPreExpr . thExpr $ t) >>= \ty ->
+                             unifyS ty (TyAtom ATyBool) >>
+                             checkWithEnv M.empty e >>= \ty' ->
+                             unifyS ty' (TyAtom ATyBool) >>                             
+                             setTypeS (getPreExpr . thExpr $ t) >>= \e' ->
+                             setTypeS e >>= \e'' ->
+                             chkProof (thProof t) >>= \ p' ->
+                             return (pos,Thm (updThmPrf p' (updThmExp e' t)) e'')
 
 checkDeriv :: DerivDecl -> TIMonad ()
 checkDeriv (Deriv _ _ _) = return ()

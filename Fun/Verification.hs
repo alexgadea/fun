@@ -34,7 +34,7 @@ createVerifications decls _ = do
         createVer :: [SpecDecl] -> [FunDecl] -> [ThmDecl] -> [Maybe Verification]
         createVer spcs funcs thms = 
             L.map (\s -> L.find (equalFun s) funcs >>= \f ->
-                         L.find (equalThm f) thms >>= \(Thm theo) ->
+                         L.find (equalThm f) thms >>= \(Thm theo _) ->
                         Just (Verification s f (thProof theo))) spcs
         equalFun :: SpecDecl -> FunDecl -> Bool
         equalFun s f = getFuncDecl s == getFuncDecl f &&

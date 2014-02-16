@@ -16,8 +16,7 @@ import qualified Equ.PreExpr as PE ( PreExpr
                                    , Focus
                                    )
 import Equ.Types (Type)
-import Equ.Proof.Proof (Proof, thExpr)
-import Equ.Expr
+import Equ.Proof.Proof (Proof)
 import Equ.Theories(createTheorem)
 
 -- Imports de Parsec.
@@ -126,13 +125,7 @@ parseThm mName = parseDecl mName parseTheo theorems
                          _ <- keywordDefSymbol
                          e <- parseExpr
                          p <- parseProof
-                         let t = createTheorem name p
-                         let declThm = Thm $ t
-                         let proofExpr = thExpr t
-                         -- Este chequeo deberia ir en el chequeo de módulos y no acá.
-                         if proofExpr /= Expr e
-                            then fail "La expresión de la declaración del teorema no coincide con la prueba"
-                            else return declThm
+                         return $ Thm (createTheorem name p) e
 
 
 -- | Parser para declaracion de valores.

@@ -49,10 +49,10 @@ instance Eq PropDecl where
     (Prop t _) == (Prop t' _) = t == t'
 
 -- | Declaración de un teorema.
-data ThmDecl = Thm Theorem
+data ThmDecl = Thm Theorem PE.PreExpr
 
 instance Show ThmDecl where
-    show (Thm t) = show $ thExpr t
+    show (Thm _ e) = show $ e
 
 instance Eq ThmDecl where
     thm == thm' = getNameDecl thm == getNameDecl thm'
@@ -175,12 +175,12 @@ instance Decl PropDecl where
                                 (Expr e) (GenConditions [])
     
 instance Decl ThmDecl where
-    getNameDecl (Thm t) =  truthName t
+    getNameDecl (Thm t _) =  truthName t
     getFuncDecl _ = Nothing
-    getExprDecl (Thm t) = let (Expr p) = thExpr t in Just p
+    getExprDecl (Thm _ e) = Just e
     getVarsDecl _ = Nothing
     getFocusProof _ = Nothing
-    createHypDecl (Thm t) = 
+    createHypDecl (Thm t _) = 
         Just $ createHypothesis (truthName t) (thExpr t) (GenConditions [])
     
 instance Decl FunDecl where

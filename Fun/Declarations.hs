@@ -5,6 +5,7 @@
 module Fun.Declarations where
 
 import Equ.Syntax hiding (Func)
+import Equ.Expr (Expr(..))
 import qualified Equ.PreExpr as PE (PreExpr, freeVars)
 import Equ.Proof hiding (setCtx, getCtx)
 import Equ.Proof.Proof
@@ -76,8 +77,9 @@ data Declarations =
                                            -- el cual contiene los tipos basicos de Equ.
                  }
 
-
 $(makeLenses ''Declarations)
+
+type WithError d = Either (ErrInDecl d) d
 
 bare :: Getting [Annot d] Declarations [Annot d] -> Declarations -> [d]
 bare f = map snd . (^. f)
@@ -165,9 +167,12 @@ valsDef = L.map (^. (_2 . valVar)) . (^. vals)
 funcsDef :: Declarations -> [Variable]
 funcsDef = L.map (^. (_2 . funDeclName)) . (^. functions)
 
+mkErrInDecl :: Decl d => Annot d -> [DeclError] -> ErrInDecl d
+mkErrInDecl ann err = ErrInDecl (ann ^. _1) err (ann ^. _2)
+
 okDecl :: (Decl d) => Annot d -> [DeclError] -> Either (ErrInDecl d) d
 okDecl ann [] = Right (ann ^. _2)
-okDecl ann err = Left $ ErrInDecl (ann ^. _1) err (ann ^. _2)
+okDecl ann err = Left $ mkErrInDecl ann err
 
 checkDecls :: (Decl d) =>
                Getting [Annot d] Declarations [Annot d]
@@ -194,8 +199,7 @@ checkSpecs ds imds = checkDecls specs ds imds $ \d -> mconcat [checkDecl checkDe
 
 -- | Chequeo de funciones; además del chequeo de variables,
 -- verificamos que el cuerpo sea un programa.
-checkFuns :: Declarations ->  Declarations -> 
-             [Either (ErrInDecl FunDecl) FunDecl]
+checkFuns :: Declarations ->  Declarations -> [Either (ErrInDecl FunDecl) FunDecl]
 checkFuns ds imds = checkDecls functions ds imds $ \d -> mconcat [checkDecl checkDefVar d, chkPrg,chkDups]
     where
         chkPrg :: Annot FunDecl -> [DeclError]
@@ -203,26 +207,44 @@ checkFuns ds imds = checkDecls functions ds imds $ \d -> mconcat [checkDecl chec
         chkPrg _  = []
         chkDups :: Annot FunDecl -> [DeclError]
         chkDups (_,Fun f vs _ _ ) = checkArgsNotDup (f:vs)
+
+-- | Chequeo de declaración de valores
+checkVals :: Declarations -> Declarations ->
+             [Either (ErrInDecl ValDecl) ValDecl]
+checkVals ds imds = checkDecls vals ds imds $ checkDecl checkDefVarVal
+
         
 -- | Chequeo de teoremas; además del chequeo de nombres duplicados,
--- verificamos que la prueba sea correcta.
+-- verificamos que la prueba sea correcta. A diferencia de las otras
+-- entidades, para los teoremas nos aseguramos que los teoremas usados
+-- sean correctos.
 checkThm :: Declarations -> Declarations ->
             [Either (ErrInDecl ThmDecl) ThmDecl]
-checkThm ds imds = zip' $ foldl chkThm ([],[]) thmDefs
-    where chkThm (errThms,okThms) decl@(pos,thm) = 
-              case checkDoubleDef decl dswi of
-                [] -> case validateProof (prfWithDecls okThms thm) of
-                        Right _ -> (errThms, thm : okThms)
-                        Left err  -> (ErrInDecl pos [InvalidProofForThm err] thm :errThms,okThms)
-                ers -> (ErrInDecl pos ers thm : errThms, okThms)
+checkThm ds imds = merge' $ foldl chkThm ([],[]) thmDefs
+    where chkThm :: ([ErrInDecl ThmDecl],[ThmDecl]) -> Annot ThmDecl -> ([ErrInDecl ThmDecl],[ThmDecl])
+          chkThm prevs decl = check prevs decl $ L.concat 
+                                                  [ chkThmProof (snd prevs) (decl ^. _2)
+                                                  , checkDoubleDef decl (ds <> imds)
+                                                  , chkThmExpr (decl ^. _2) 
+                                                  ]
 
-          prfWithDecls thms (Thm p) = addDeclHypothesis ds (thms ++ bareThms imds) imds (thProof p)
-        -- Grupo de declaraciones de un módulos mas las de sus imports
-          dswi :: Declarations 
-          dswi = ds <> imds
+          prfWithDecls thms (Thm t _) = addDeclHypothesis ds (thms ++ bareThms imds) imds (thProof t)
           thmDefs :: [Annot ThmDecl]
           thmDefs = reverse $ ds ^. theorems
-          zip' (ers,oks) = map Left ers ++ map Right oks
+          merge' (ers,oks) = map Left ers ++ map Right oks
+          
+          check :: ([ErrInDecl ThmDecl],[ThmDecl]) -> Annot ThmDecl -> [DeclError] -> ([ErrInDecl ThmDecl],[ThmDecl])
+          check prevs (_,thm) [] = over _2 (thm:) prevs
+          check prevs decl ers   = over _1 (mkErrInDecl decl ers:) prevs
+
+          chkThmProof :: [ThmDecl] -> ThmDecl -> [DeclError]
+          chkThmProof thms = either (return . InvalidProofForThm) (const []) . 
+                               validateProof . prfWithDecls thms
+
+          -- | La expresión del teorema es la misma que la de la prueba.
+          chkThmExpr :: ThmDecl -> [DeclError]
+          chkThmExpr (Thm t e) = if e == e' then [] else [InvalidExprForThm e e']
+                     where (Expr e') = thExpr t
 
 hypListFromDecls :: Declarations -> [ThmDecl] -> [Hypothesis]
 hypListFromDecls decls thms = mapMaybe createHypDecl thms <>
@@ -244,12 +266,8 @@ addDeclHypothesis decls validThms mImportDecls pr =
     where dswi :: Declarations 
           dswi = decls <> mImportDecls
 
-        
-checkVals :: Declarations -> Declarations ->
-             [Either (ErrInDecl ValDecl) ValDecl]
-checkVals ds imds = checkDecls vals ds imds $ checkDecl checkDefVarVal
 
--- | Chequeo de variables
+-- | Chequeo de que las variables usadas estén dentro del scope.
 checkDefVar :: Decl d => d -> Declarations -> [DeclError]
 checkDefVar d ds = concatMap inScope . S.toList . PE.freeVars . getFocusDecl $ d
     where
@@ -257,10 +275,12 @@ checkDefVar d ds = concatMap inScope . S.toList . PE.freeVars . getFocusDecl $ d
         inScope v = if v `L.elem` vars then [] else [NotInScopeVar v]
         vars = valsDef ds ++ funcsDef ds ++ fromMaybe [] (getVarsDecl d)
 
+-- | Chequeo de que las variables que ocurren en una declaración
+-- de valor estén 
 checkDefVarVal :: ValDecl ->  Declarations -> [DeclError]
 checkDefVarVal d ds = checkDefVar d $ (vals  %~ L.filter ((d/=) . snd)) ds
 
-
+-- | Chequeo de que no haya argumentos repetidos.
 checkArgsNotDup :: [Variable] -> [DeclError]
 checkArgsNotDup = map (ArgDuplicated . varName) . getDups
                 where getDups = go S.empty S.empty
@@ -276,7 +296,9 @@ getFocusDecl = fromJust . getExprDecl
 checkIsPrg :: Decl d => d -> Bool
 checkIsPrg = isPrg . fromJust . getExprDecl
 
-
+-- | Chequeo por nombres de entidades duplicados. Puesto que las
+-- funciones pueden tener especificaciones, filtramos las
+-- especificaciones cuando comprobamos funciones y viceversa.
 checkDoubleDef :: (Duplicated d,Decl d,Eq d) => Annot d -> 
                                    Declarations -> [DeclError]
 checkDoubleDef (dPos,decl) = mconcat [ checkDoubleDef' . (^. vals)
@@ -314,11 +336,13 @@ emptyInDecls = InvalidDeclarations { inSpecs      = []
                                    }
 
 initDeclarations :: Declarations
-initDeclarations = flip execState mempty $ do theorems .= map (const initDeclPos &&& Thm) initThms;
+initDeclarations = flip execState mempty $ do theorems .= map (const initDeclPos &&& mkThm) initThms;
                                               indTypes .= mapIndTypes
     where
         initDeclPos = DeclPos initPosThms initPosThms (pack "")
         initPosThms = newPos "TeoremasIniciales" 0 0
+        mkThm thm = Thm thm e
+            where (Expr e) = thExpr thm
 
 modifyFunDecl :: (FunDecl -> FunDecl) -> Declarations -> Declarations
 modifyFunDecl f = over functions (map (second f))
