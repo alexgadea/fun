@@ -5,6 +5,7 @@ module Fun.Parser.Decl where
 import Equ.Syntax (var, tRepr,Variable(..))
 import qualified Equ.Parser as EquP ( parsePreExpr
                                     , parseVariable
+                                    , parsePattern
                                     , proof
                                     , initPProofState
                                     , initPExprState
@@ -95,6 +96,19 @@ parseFunUndec fun = Fun fun <$  keywordAppSymbol
                             <*> parseExpr 
                             <*  many (whites <|> tryNewline)
                             <*> (parseTheoName <|> (keywordEnd >> return Nothing))
+
+
+--parseFunCase :: Variable -> ParserD ([PreExpr],PreExpr)
+parseFunCase fun = do fun' <- parseVar
+                      _ <- keywordAppSymbol
+--                      when (fun /= fun') (fail $ "Caso para otra función")
+                      pts <- EquP.parsePattern `sepBy1` keywordAppSymbol
+                      _   <- keywordDefSymbol
+                      e   <- parseExpr
+                      return (pts,e)
+
+
+
 
 parseSpec :: ModName -> ParserD ()
 parseSpec mName = parseDecl mName (parseWithType parseSpecUndec) specs
