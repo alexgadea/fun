@@ -127,8 +127,8 @@ removeVar c v = (vars %~ M.delete (tRepr v) $ c , M.findWithDefault [] vn vs)
 -- | Chequeo de diferentes elementos sint&#225;cticos simples como
 -- variables, constantes, s&#237;mbolos de funci&#243;n y operadores.
 checkSyn :: (Ord k, Syntactic s) => s -> (s -> k) ->
-            ((CtxSyn k -> Accessor (CtxSyn k) (CtxSyn k))
-                -> TCCtx -> Accessor (CtxSyn k) TCCtx)
+            ((CtxSyn k -> Const (CtxSyn k) (CtxSyn k))
+                -> TCCtx -> Const (CtxSyn k) TCCtx)
               -> TyState Type
 checkSyn s name getM = use (ctx . getM) >>= withTypes s . M.lookup (name s)
 
