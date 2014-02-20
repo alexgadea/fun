@@ -60,7 +60,7 @@ isCan :: PreExpr -> EvalMonad Bool
 isCan e = lift (getType e >>= getIndType) >>= isCanonical e
 
 isCanonical :: PreExpr -> IndType -> EvalMonad Bool
-isCanonical (Con c) t = return True -- $ c `elem` constants t
+isCanonical (Con _) _ = return True
 isCanonical (UnOp op e') t = isCan e' >>= return . (isConstructor t op &&)
 isCanonical (BinOp op e e') t = isCan e >>= \b ->
                                 isCan e' >>= \b' ->

@@ -18,11 +18,11 @@ import Equ.TypeChecker.Unification
 import Data.Map (Map,fromList,delete,empty)
 import qualified Data.Map as M
 import Control.Monad.Trans.State
-import Control.Monad(replicateM)
-import Control.Monad(when)
-import Data.Maybe(isNothing)
+import Control.Monad (replicateM)
+import Control.Monad (when)
+import Data.Maybe (isNothing)
 import Control.Lens hiding (rewrite)
-import Control.Arrow(first,second)
+import Control.Arrow (second)
 
 type Ass = Map VarName [Type]
 
@@ -74,8 +74,7 @@ getFunType fun = do ass <- use funcs
                     return (head ts)
              
 checkDeriv :: Annot DerivDecl -> TIMonad (Annot DerivDecl)
-checkDeriv (pos,Deriv fun v css) = do ass <- use funcs
-                                      ty <- getFunType fun
+checkDeriv (pos,Deriv fun v css) = do ty <- getFunType fun
                                       let fun' = setVarType ty fun
                                       let argsTy = argsTypes ty
                                       when (null argsTy) (throwError "El tipo de la función no es funcional.")

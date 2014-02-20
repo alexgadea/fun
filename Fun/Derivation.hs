@@ -115,8 +115,9 @@ addHypInSubProofs hyp = L.map (second updCtx)
                           Right p' = setCtx ctx' p 
                       in p'
 
-isDeclared deriv derF declF = when (not (isEq derF declF)) $ 
-                                Left ([DerivedFunctionDeclaredNotEqual (derF ^. funDeclName)],deriv)
+isDeclared :: DerivDecl -> FunDecl -> FunDecl -> Either ([DerivationError], DerivDecl) ()
+isDeclared der derF declF = when (not (isEq derF declF)) $ 
+                                Left ([DerivedFunctionDeclaredNotEqual (derF ^. funDeclName)],der)
 
 
 mkIndHyp :: Variable -> Relation -> PE.PreExpr -> PE.PreExpr -> Hypothesis
@@ -129,7 +130,7 @@ checkDerivation :: Declarations -> Declarations -> [ThmDecl] ->
 checkDerivation decls imDecls thms = either Left (checkDer decls imDecls thms) 
 
 getVarInSpec :: Variable -> SpecDecl -> DerivDecl -> EDeriv' Variable
-getVarInSpec v spec derDecl = getVarInSpec' v (spec ^. specArgs)
+getVarInSpec v spc derDecl = getVarInSpec' v (spc ^. specArgs)
     where getVarInSpec' v' [] = Left ([InvalidVariable v'],derDecl)
           getVarInSpec' v' (w:ws) = if v' == w
                                     then return w

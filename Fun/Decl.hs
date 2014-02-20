@@ -94,7 +94,7 @@ instance Show FunDecl where
 
 -- POR QUE ESTA INSTANCIA ESTA DEFINIDA ASI??????
 instance Eq FunDecl where
-    (Fun f vs e _) == (Fun f' vs' e' _) = f == f'
+    (Fun f _ _ _) == (Fun f' _ _ _) = f == f'
 
 -- | otra forma de definir igualdad de declaración de funciones!!!
 isEq :: FunDecl -> FunDecl -> Bool
