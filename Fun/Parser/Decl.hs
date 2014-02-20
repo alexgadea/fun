@@ -30,6 +30,7 @@ import qualified Data.Map as M (empty)
 
 import Control.Lens
 -- Imports Monad.
+import Control.Monad
 import Control.Applicative ((<$>),(<*>),(<$),(<*))
 
 -- Imports Fun.
@@ -98,16 +99,14 @@ parseFunUndec fun = Fun fun <$  keywordAppSymbol
                             <*> (parseTheoName <|> (keywordEnd >> return Nothing))
 
 
---parseFunCase :: Variable -> ParserD ([PreExpr],PreExpr)
+parseFunCase :: Variable -> ParserD ([PE.PreExpr],PE.PreExpr)
 parseFunCase fun = do fun' <- parseVar
                       _ <- keywordAppSymbol
---                      when (fun /= fun') (fail $ "Caso para otra función")
+                      when (fun /= fun') (fail $ "Caso para otra función")
                       pts <- EquP.parsePattern `sepBy1` keywordAppSymbol
                       _   <- keywordDefSymbol
                       e   <- parseExpr
                       return (pts,e)
-
-
 
 
 parseSpec :: ModName -> ParserD ()
@@ -187,13 +186,11 @@ parseDer mName = parseDecl mName parseDeriv derivs
                     return (f,p)
 
 parseWithType :: Decl a => (Variable -> ParserD a) -> ParserD a
-parseWithType p = parseVar >>= \v ->
-                  (p v <|> parseTyped v p)
+parseWithType p = parseVar >>= \v -> (p v <|> parseTyped v p)
     where parseTyped v p' = try $ keyword ":" >> parseFunType >>= \ty ->
                                  parseVar >>= \v' ->
-                                 if v /= v' 
-                                 then fail (show v ++ " != " ++ show v') 
-                                 else p' (var (tRepr v) ty)
+                                 when (v /= v') (fail (show v ++ " != " ++ show v')) >>
+                                 p' (var (tRepr v) ty)
 
 
 parseDecl :: ModName-> ParserD a -> Setting' (->) Declarations [Annot a] -> ParserD ()

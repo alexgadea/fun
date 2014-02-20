@@ -28,12 +28,12 @@ type EvalMonad a = StateT EvalEnv Maybe a
 
 
 
--- | Las expresiones constantes, aplicacion de operadores
---   e if, tienen reglas mediante las cuales se evaluan.
---   La aplicación de variables, la expresión por casos y las
---   variables definidas tienen reglas únicas, por lo cual
---   son consideradas especialmente. Definimos un tipo de dato
---   para referirnos a cada una de esas reglas especiales.
+-- | Las expresiones constantes, aplicacion de operadores e if, tienen
+--   reglas mediante las cuales se evaluan.  La aplicación de
+--   variables, la expresión por casos y las variables definidas
+--   tienen reglas únicas, por lo cual son consideradas
+--   especialmente. Definimos un tipo de dato para referirnos a cada
+--   una de esas reglas especiales.
 data SpecialRule a = SpecialRule {
                         appRule :: a
                       , caseRule :: a
@@ -57,18 +57,18 @@ evalTrace' steps env e =
           (runStateT (evalStepTrace e) env)
 
 isCan :: PreExpr -> EvalMonad Bool
-isCan e = lift (getType e >>= getIndType) >>= return . isCanonical e
+isCan e = lift (getType e >>= getIndType) >>= isCanonical e
 
-isCanonical :: PreExpr -> IndType -> Bool
-isCanonical (Con c) t =  c `elem` constants t
-isCanonical (UnOp op e') t = isConstructor t op && isCanonical e' t
-     
-isCanonical (BinOp op e e') t = isConstructor t op &&
-                                isCanonical e t && isCanonical e' t
--- Una variable es canónica si es un símbolo de función
--- (es una expresión lambda)
-isCanonical (Var _) _ = False
-isCanonical _ _ = False
+isCanonical :: PreExpr -> IndType -> EvalMonad Bool
+isCanonical (Con c) t = return True -- $ c `elem` constants t
+isCanonical (UnOp op e') t = isCan e' >>= return . (isConstructor t op &&)
+isCanonical (BinOp op e e') t = isCan e >>= \b ->
+                                isCan e' >>= \b' ->
+                                return (isConstructor t op && b && b')
+-- Una variable es canónica si es un símbolo de función (es una
+-- expresión lambda)
+isCanonical (Var _) _ = return False
+isCanonical _ _ = return False
 
 
 vardef :: Variable -> EvalMonad Bool
@@ -86,7 +86,7 @@ evalStepTrace = evalStep' matchRulesTrace (SpecialRule "E-APP" "E-CASE" "E-VAR")
 -- | Un paso de evaluación.
 --   Si la expresión que se quiere evaluar no tiene las subexpresiones
 --   canónicas, entonces el paso se aplicará a la subexpresión (en el marco de la teoria
---   presentada en la tesis, corresponde a aplicar el paso de evaluacion "E-CONTEXT"
+--   presentada en la tesis) corresponde a aplicar el paso de evaluacion "E-CONTEXT"
 evalStep' :: (PreExpr -> [EvalRule] -> Maybe (PreExpr,a)) -> 
              SpecialRule a ->
              PreExpr -> EvalMonad (PreExpr,a)
@@ -95,14 +95,14 @@ evalStep' mrules sr e@(UnOp op e') =
            (lift (mrules e unOpRules))
            (evalStep' mrules sr e' >>=
                 return . first (UnOp op))
-evalStep' mrules sr e@(BinOp op e1 e2) =
+evalStep' mrules sr e@(BinOp op e1 e2) = 
     whenMT (isCan e1)
-           (whenMT (isCan e2)
-                   (lift (mrules e binOpRules))
-                   (evalStep' mrules sr e2 >>=
-                        return . first (BinOp op e1)))
+           (whenMT (isCan e2) 
+                    (lift (mrules e binOpRules))
+                    (evalStep' mrules sr e2 >>=
+                         return . first (BinOp op e1)))
             (evalStep' mrules sr e1 >>= 
-            return . first (flip (BinOp op) e2))
+               return . first (flip (BinOp op) e2))
 evalStep' mrules sr e@(If b e1 e2) =
     whenMT (isCan b)
            (lift (mrules e ifRules))
@@ -151,9 +151,7 @@ evalStep' _ sr (Case e' ps) =
     matchPatterns e' ps >>= \(ei,subst) -> 
     return (applySubst ei subst,caseRule sr)
     
-    -- matchPatterns busca por un patron en la lista que matchee con la expresión e.
-    -- Si lo encuentra retorna la expresión correspondiente al patrón y la substitución del matching.
-    -- Si no lo encuentra Nothing
+
 evalStep' f sr (Paren e) = evalStep' f sr e
 evalStep' _ sr (Var x) = 
     whenMT (vardef x)
@@ -162,8 +160,12 @@ evalStep' _ sr (Var x) =
             then return (edef,varRule sr)
             else lift Nothing)
            (lift Nothing)
-evalStep' _ _ _ = lift Nothing     
+evalStep' _ _ _ = lift Nothing
 
+-- | matchPatterns busca por un patron en la lista que matchee con la
+--  expresión e.  Si lo encuentra retorna la expresión correspondiente
+--  al patrón y la substitución del matching.  Si no lo encuentra
+--  Nothing
 matchPatterns :: PreExpr -> [(PreExpr,PreExpr)] -> EvalMonad (PreExpr,ExprSubst)
 matchPatterns _ [] = lift Nothing
 matchPatterns e ((p1,e1):ps) = either (const $ matchPatterns e ps)
@@ -187,7 +189,7 @@ applyFun v e =
                    modify (M.insert vnew (vs,(applySubst edef $ subst y))) >>
                    return (Var vnew)
          
-    where subst x = M.fromList [(x,e)]
+    where subst x = M.singleton x e
 
 
 -- | Crea un EvalEnv a partir de una lista de declaraciones de funciones

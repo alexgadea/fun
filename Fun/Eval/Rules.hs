@@ -84,10 +84,9 @@ matchRulesTrace e rs = matchRules' e rs matchRuleTrace
     
     
 matchRules' :: Show a => PreExpr -> [EvalRule] -> (PreExpr -> EvalRule -> Maybe a) -> Maybe a
-matchRules' e rs f = return (catMaybes $ map (f e) rs) >>=
-                     \ls -> case ls of
-                                [] -> Nothing
-                                (l:_) -> return l
+matchRules' e rs f = return (catMaybes $ map (f e) rs) >>= \ls ->
+                     if null ls then Nothing else Just (head ls)
+
                               
 -- Variables para las reglas:
 varZ1,varZ2,varZ3 :: Expr

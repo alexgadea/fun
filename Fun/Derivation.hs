@@ -17,7 +17,7 @@ import Fun.Derivation.Error
 import Equ.Proof
 import Equ.Expr
 import Equ.Rule (getRelationFromType,Relation)
-import Equ.TypeChecker (getType,typeCheckPreExpr)
+import Equ.TypeChecker (getType)
 import Equ.Theories
 
 import Equ.Syntax
@@ -27,12 +27,11 @@ import qualified Data.Text as T hiding (map,foldl)
 import Data.List as L (map, find)
 import Data.Either 
 import qualified Data.Map as M
-import qualified Data.Set as Set
 
-import Data.Maybe (fromJust)
 import Data.Monoid
 
-import Control.Arrow ((***))
+import Control.Arrow ((***),second)
+import Control.Monad
 import Control.Lens
 
 -- | A partir de las declaraciones, crea los objetos "Derivation" juntando la informacion
@@ -54,125 +53,105 @@ createDeriv pSpecs pFuncs prevDerivs (derPos,der) = der':prevDerivs
            newDer sp = Right $ Derivation der derPos sp 
                               $ L.find (sameDecl der) pFuncs
 
+-- | Verifica que no haya derivaciones duplicadas.
 alreadyDefined :: DerivDecl -> [Derivation] -> EDeriv' ()
 alreadyDefined derDecl = mconcat . map (checkRedef derDecl . deriv)
 
+-- | Controla si ya existe una derivación para la misma función.
 checkRedef :: (Decl d) => d -> DerivDecl -> EDeriv' ()
-checkRedef d d' = if sameDecl d d'
-                  then Left ([RedefinedDerivation $ getNameDecl d'],d')
-                  else mempty
-            
+checkRedef d d' = when (sameDecl d d') $ Left ([RedefinedDerivation $ getNameDecl d'],d')
 
--- | Funcion que dada una derivacion dice si es válida o no. Esto es solo para las derivaciones
---   por recursión. Si luego se implementa otro tipo de derivación, entonces debería diferenciarse
-checkDerivation :: Declarations -> Declarations -> [ThmDecl] -> 
-                   EDeriv -> EDeriv' (DeclPos,FunDecl)
-checkDerivation _ _ _ (Left e) = Left e
-checkDerivation decls imDecls thms (Right der) = 
-            let (declS,mDeclF,declD) = (spec der,prog der,deriv der) in
+-- | Funcion que dada una derivacion dice si es válida o no. Esto es
+--   solo para las derivaciones por recursión. Si luego se implementa
+--   otro tipo de derivación, entonces debería diferenciarse.
+checkDer :: Declarations -> Declarations -> [ThmDecl] -> Derivation -> EDeriv' (Annot FunDecl)
+checkDer decls imDecls thms der = do
+               
+                let (declS,mDeclF,declD) = (spec der,prog der,deriv der) 
                 -- primero chequeamos que la variable sobre la que se hace
                 -- la derivación por recursión es la misma que está definida en
                 -- la especificación.
-                return (getVarsDecl declD) >>= \(Just [v]) ->
-                return (tRepr v) >>= \vname ->
-                return (L.map tRepr $ fromJust $ getVarsDecl declS) >>= \spVars ->
-                whenDer (vname `elem` spVars) ([InvalidVariable  v],declD) >>
+                    v = declD ^. derVar
+                    f = declD ^. derFun
+                    pfsnt = declD ^. derCases
+                    vname = tRepr v
+                    spVars = L.map tRepr $ declS ^. specArgs
+                    expr = declS ^. specSpec
+                    (Just texpr) = getType expr
+                    rel = getRelationFromType texpr
+                whenDer (vname `elem` spVars) ([InvalidVariable  v],declD)
                 -- Remplazamos la variable por la de la especificación, ya que ésta está
                 -- tipada.
-                getVarInSpec v declS declD >>= \vspec' -> 
-                typeVariable vspec' declS declD >>= \vspec ->
-                return declD >>= \(Deriv f _ pfsnt) ->
-                typeCases pfsnt declD >>= \pfs ->
-                return (Deriv f vspec pfs) >>= \declD' ->
+                vspec <- getVarInSpec v declS declD
+                let declD' = Deriv f vspec pfsnt
                 -- Ahora construimos una prueba inductiva con los datos de la derivación.
                 -- Se asume que la declaración está bien tipada
-                return (getExprDecl declS) >>= \(Just expr) ->
-                return (getType expr) >>= \(Just texpr) ->
-                return (getRelationFromType texpr) >>= \rel -> 
-                firstExpr declS declD' >>= \fexpr ->
-                caseExprFromDerivation declS vspec declD' >>= \caseExpr ->
-                -- agregar como hipotesis la especificacion
-                return (createHypothesis (T.concat [T.pack "spec ",tRepr f]) (makeExpr rel fexpr expr)
-                                 (GenConditions [])) >>= \hypSpec ->
-                addHypInSubProofs hypSpec pfs >>= \pfs' ->
-                return (addHypothesis' hypSpec M.empty) >>= \ctx ->
+                    fexpr = firstExpr declS
+                    caseExpr = caseExprFromDerivation vspec declD'
+                --  agregar como hipotesis la especificacion
+                    hypSpec = mkIndHyp f rel fexpr expr
+                    pfs' = addHypInSubProofs hypSpec pfsnt
+                    ctx = addHypothesis' hypSpec M.empty
+                    prf' = Ind ctx rel (PE.toFocus fexpr) 
+                                       (PE.toFocus caseExpr) 
+                                       (PE.toFocus $ PE.Var vspec) 
+                                       pfs'
+                     -- Agregamos todas las declaraciones como hipotesis                                       
+                    prf = addDeclHypothesis decls thms imDecls prf'
+                    valPrf = validateProof prf
+                    funPos = derivPos der
+                    derivedFun = createFunDecl declS vspec declD'
+                _ <- maybe (return ()) (isDeclared declD' derivedFun) mDeclF
                 
-                return (Ind ctx rel (PE.toFocus fexpr) (PE.toFocus caseExpr) 
-                                    (PE.toFocus $ PE.Var vspec) pfs') >>= 
-                \proof' -> 
-                -- Agregamos todas las declaraciones como hipotesis
-                return (addDeclHypothesis decls thms imDecls proof') >>= \proof ->
-
-                return (validateProof proof) >>= \pmProof ->
-                case pmProof of
+                case valPrf of
                      Left err -> Left ([ProofNotValid err],declD')
-                     Right _ -> createFunDecl declS vspec declD' (derivPos der) >>= \(pos,derivedFun) ->
-                                case mDeclF of
-                                     Nothing -> return (pos,derivedFun)
-                                     Just declF -> if isEq declF derivedFun
-                                                      then return (pos,derivedFun)
-                                                      else Left ([DerivedFunctionDeclaredNotEqual f],declD')
+                     Right _ -> return (funPos,derivedFun)
                                 
-    where makeExpr :: Relation -> PE.PreExpr -> PE.PreExpr -> Expr
-          makeExpr r e e' = Expr $ PE.BinOp (relToOp r) e e'
-          addHypInSubProofs :: Hypothesis -> [(PE.Focus,Proof)] -> EDeriv' [(PE.Focus,Proof)]
-          addHypInSubProofs hyp pfs = return $ L.map (\(f,p) -> 
-                                        let Right ctx = getCtx p in
-                                            let ctx' = addHypothesis' hyp ctx in
-                                                let Right p' = setCtx ctx' p in
-                                                    (f,p')) pfs
-          isEq (Fun v vs expr _) (Fun v' vs' expr' _) = v==v' && vs==vs' && expr==expr'
-                                
+
+addHypInSubProofs :: Hypothesis -> [(PE.Focus,Proof)] -> [(PE.Focus,Proof)]
+addHypInSubProofs hyp = L.map (second updCtx)
+     where updCtx p = let Right ctx = getCtx p 
+                          ctx' = addHypothesis' hyp ctx
+                          Right p' = setCtx ctx' p 
+                      in p'
+
+isDeclared deriv derF declF = when (not (isEq derF declF)) $ 
+                                Left ([DerivedFunctionDeclaredNotEqual (derF ^. funDeclName)],deriv)
+
+
+mkIndHyp :: Variable -> Relation -> PE.PreExpr -> PE.PreExpr -> Hypothesis
+mkIndHyp fun rel fexpr expr = createHypothesis name hypExpr (GenConditions [])
+         where hypExpr = Expr $ PE.BinOp (relToOp rel) fexpr expr
+               name = T.concat [T.pack "spec ",tRepr fun]
+
+checkDerivation :: Declarations -> Declarations -> [ThmDecl] -> 
+                   EDeriv -> EDeriv' (DeclPos,FunDecl)
+checkDerivation decls imDecls thms = either Left (checkDer decls imDecls thms) 
+
 getVarInSpec :: Variable -> SpecDecl -> DerivDecl -> EDeriv' Variable
-getVarInSpec v decl derDecl =
-    let Just varsDecl = getVarsDecl decl in
-        getVarInSpec' v varsDecl
-        
+getVarInSpec v spec derDecl = getVarInSpec' v (spec ^. specArgs)
     where getVarInSpec' v' [] = Left ([InvalidVariable v'],derDecl)
-          getVarInSpec' v' (w:ws) = if tRepr v' == tRepr w
+          getVarInSpec' v' (w:ws) = if v' == w
                                     then return w
                                     else getVarInSpec' v' ws
 
 
-firstExpr :: SpecDecl -> DerivDecl -> EDeriv' PE.PreExpr
-firstExpr spDecl _ = 
-    return (getFuncDecl spDecl) >>= \(Just f) ->
-    return (getVarsDecl spDecl) >>= \(Just vs) ->
-    return (exprApplyFun f vs)
-    
+firstExpr :: SpecDecl ->  PE.PreExpr
+firstExpr spDecl = exprApplyFun (spDecl ^. specName) (spDecl ^. specArgs)
     where exprApplyFun :: Variable -> [Variable] -> PE.PreExpr
           exprApplyFun f = foldl (\e -> PE.App e . PE.Var) (PE.Var f)
 
-createFunDecl :: SpecDecl -> Variable -> DerivDecl -> DeclPos -> EDeriv' (DeclPos,FunDecl)
-createFunDecl specDecl v derDecl derPos = 
-    let Just vars = getVarsDecl specDecl in
-        let Just f = getFuncDecl specDecl in
-            caseExprFromDerivation specDecl v derDecl >>= \exprFun ->
-            return $ (derPos,Fun f vars exprFun Nothing)
+createFunDecl :: SpecDecl -> Variable -> DerivDecl -> FunDecl
+createFunDecl specDecl v derDecl = Fun fun vars expr Nothing
+    where vars = specDecl ^. specArgs
+          fun  = specDecl ^. specName
+          expr = caseExprFromDerivation v derDecl
 
-caseExprFromDerivation :: SpecDecl -> Variable -> DerivDecl -> EDeriv' PE.PreExpr
-caseExprFromDerivation _ v derDecl = do
-    let pattern = PE.Var v
-    let Just pfs = getFocusProof derDecl
-    let cases = L.map (PE.toExpr *** PE.toExpr . finalExpr) pfs
-    return $ PE.Case pattern cases
-    
-    where finalExpr = fromRight . getEnd 
-          fromRight = either (error "fromRight Left") id 
-    
--- | CUANDO EL TYPE CHECKER ESTE TERMINADO NO HARIA FALTA LLAMAR A ESTAS FUNCIONES
---   YA QUE LOS PARAMETROS DE UNA DECLARACION SIEMPRE TENDRAN EL TIPO
-typeVariable :: Variable -> SpecDecl -> DerivDecl -> EDeriv' Variable
-typeVariable v declS declD =
-    return (getExprDecl declS) >>= \(Just expr) ->
-    either (const $ Left ([InvalidVariable  v],declD)) return (typeCheckPreExpr expr)
-    >>= \typedExpr -> maybe (Left ([InvalidVariable  v],declD)) 
-                      return
-                      (L.find (==v) (Set.toList (PE.freeVars typedExpr)))               
-                      
-typeCases :: [(PE.Focus,Proof)] -> DerivDecl -> EDeriv' [(PE.Focus,Proof)]
-typeCases cs declD = let tc_cs = map (\(f,p) -> (typeCheckPreExpr $ PE.toExpr f,p)) cs in
-                     if lefts (map fst tc_cs) /= []
-                      then Left ([TypesError],declD)
-                      else return (map (\(Right e,p) -> (PE.toFocus e,p)) tc_cs)         
-                      
+caseExprFromDerivation :: Variable -> DerivDecl -> PE.PreExpr
+caseExprFromDerivation v derDecl = PE.Case pattern cases
+   where pattern = PE.Var v
+         pfs = derDecl ^. derCases
+         cases = L.map (PE.toExpr *** PE.toExpr . finalExpr) pfs
+         finalExpr = fromRight . getEnd 
+         fromRight = either (error "fromRight Left") id
+

@@ -66,16 +66,18 @@ checkModule m = do
     let mImports = filter ((`elem` rImports) . (^. modName)) env
     
     let mImportedDecls = mconcat $ map (^. validDecls) mImports
-    
-    let invalidSpec = lefts $ checkSpecs (m ^. validDecls ) mImportedDecls
-    let invalidFuns = lefts $ checkFuns  (m ^. validDecls) mImportedDecls
-
-    let invalidVals = lefts $ checkVals  (m ^. validDecls) mImportedDecls
 
     let ass = getTypesAss mImports
 
     flip (either (\err -> return . Just $ createError (m ^. modName) ([],[],[],[],[],[],err)))
-         (typeCheckDeclarations m ass) $ \m' -> do
+         (typeCheckDeclarations m ass) $ \m' -> do    
+      let invalidSpec = lefts $ checkSpecs (m' ^. validDecls ) mImportedDecls
+      let invalidFuns = lefts $ checkFuns  (m' ^. validDecls) mImportedDecls
+
+      let invalidVals = lefts $ checkVals  (m' ^. validDecls) mImportedDecls
+
+
+
       let thmsCheck = checkThm (m' ^. validDecls) mImportedDecls
       let invalidThms  = lefts thmsCheck
 

@@ -9,7 +9,7 @@ import Fun.Declarations
 import Fun.Decl
 
 import Equ.PreExpr
-import Equ.Proof.Proof(Theorem(..),updThmExp,updThmPrf)
+import Equ.Proof.Proof(Proof,Theorem(..),updThmExp,updThmPrf)
 import Equ.Syntax(VarName)
 import Equ.Types
 import Equ.Expr (getPreExpr)
@@ -22,7 +22,7 @@ import Control.Monad(replicateM)
 import Control.Monad(when)
 import Data.Maybe(isNothing)
 import Control.Lens hiding (rewrite)
-import Control.Arrow(second)
+import Control.Arrow(first,second)
 
 type Ass = Map VarName [Type]
 
@@ -47,11 +47,11 @@ checkVal (pos,(Val v expr)) = checkWithEnv M.empty expr >>= \t ->
 
 tcCheckProp :: Annot PropDecl -> TIMonad (Annot PropDecl)
 tcCheckProp ap@(_,Prop pn expr) = mkCtxVar expr >> 
-                                 checkWithEnv M.empty expr >>= \t -> 
-                                 unifyS t (TyAtom ATyBool) >> 
-                                 updAss' >>
-                                 setTypeS expr >>= \e ->
-                                 return $ second (const $ Prop pn e) ap
+                                  checkWithEnv M.empty expr >>= \t -> 
+                                  unifyS t (TyAtom ATyBool) >> 
+                                  updAss' >>
+                                  setTypeS expr >>= \e ->
+                                  return $ second (const $ Prop pn e) ap
 
 tcCheckThm :: Annot ThmDecl -> TIMonad (Annot ThmDecl)
 tcCheckThm (pos,(Thm t e)) = mkCtxVar (getPreExpr . thExpr $ t) >>
@@ -61,19 +61,42 @@ tcCheckThm (pos,(Thm t e)) = mkCtxVar (getPreExpr . thExpr $ t) >>
                              unifyS ty' (TyAtom ATyBool) >>                             
                              setTypeS (getPreExpr . thExpr $ t) >>= \e' ->
                              setTypeS e >>= \e'' ->
-                             chkProof (thProof t) >>= \ p' ->
+                             chkProof M.empty (thProof t) >>= \ p' ->
                              return (pos,Thm (updThmPrf p' (updThmExp e' t)) e'')
 
-checkDeriv :: DerivDecl -> TIMonad ()
-checkDeriv (Deriv _ _ _) = return ()
+
+getFunType :: Variable -> TIMonad Type
+getFunType fun = do ass <- use funcs
+                    let t = M.lookup (varName fun) ass 
+                    when (isNothing t) (throwError $ "Función que no está en la lista de suposiciones")
+                    let (Just ts) = t
+                    when (null ts) (throwError $ "Función que está en la lista, sin tipo!")
+                    return (head ts)
+             
+checkDeriv :: Annot DerivDecl -> TIMonad (Annot DerivDecl)
+checkDeriv (pos,Deriv fun v css) = do ass <- use funcs
+                                      ty <- getFunType fun
+                                      let fun' = setVarType ty fun
+                                      let argsTy = argsTypes ty
+                                      when (null argsTy) (throwError "El tipo de la función no es funcional.")
+                                      let argTy = head argsTy
+                                          env = M.singleton (varName v) argTy
+                                          v' = setVarType argTy v
+                                      css' <- mapM (checkCaseDeriv env argTy) css
+                                      return (pos,Deriv fun' v' css')
+                                  
+checkCaseDeriv :: Env -> Type -> (Focus,Proof) -> TIMonad (Focus,Proof)
+checkCaseDeriv env tyArg ((e,pt),p)= mkCtxVar e >> 
+                                     checkWithEnv M.empty e >>= \ty ->
+                                     unifyS tyArg ty >> 
+                                     use (ctx . vars) >>= \env' ->
+                                     chkProof (M.union env (toEnv env')) p >>= \p' ->
+                                     setTypeS e >>= \e' ->
+                                     return ((e',pt),p')
 
 checkTypedDecl :: Variable -> [Variable] -> PreExpr -> TIMonad (VarName,PreExpr)
 checkTypedDecl fun args body = do ass <- use funcs
-                                  let t = M.lookup (varName fun) ass 
-                                  when (isNothing t) (throwError $ "Función que no está en la lista de suposiciones")
-                                  let (Just ts) = t
-                                  when (null ts) (throwError $ "Función que está en la lista, sin tipo!")
-                                  let ty = head ts
+                                  ty <- getFunType fun
                                   if arity ty /= length args
                                   then throwError $ "Unexpected number of arguments: " ++ show ty ++ " <> " ++ show args
                                   else do 
@@ -102,6 +125,7 @@ tcCheckModule m a = do let dcls = m ^. validDecls
                        let vls  = dcls ^. vals 
                        let thms = dcls ^. theorems
                        let prps = dcls ^. props
+                       let drvs = dcls ^. derivs
                        let env  = map (\f -> (f ^. funDeclName,f ^. funDeclArgs)) fs
                                ++ map (\f -> (f ^. specName,f ^. specArgs)) sps
 
@@ -110,6 +134,7 @@ tcCheckModule m a = do let dcls = m ^. validDecls
 
                        fbds <- mapM checkFunDecl fs
                        sbds <- mapM checkSpecDecl sps
+                       drvs' <- mapM checkDeriv drvs
                        vls' <- mapM checkVal vls
                        thms' <- mapM tcCheckThm thms
                        prps' <- mapM tcCheckProp prps
@@ -121,6 +146,7 @@ tcCheckModule m a = do let dcls = m ^. validDecls
                                               validDecls . vals  .= vls'                     ;
                                               validDecls . theorems .= thms';
                                               validDecls . props .= prps';
+                                              validDecls . derivs .= drvs' ;
                                             ) m
 
 updFunTypes :: [(VarName,PreExpr)] -> Ass -> [Annot FunDecl] -> [Annot FunDecl]
@@ -159,7 +185,10 @@ localState args = ctx . vars %= flip withoutLocal args
 typeCheckDeclarations :: Module -> [(VarName,[Type])] -> Either String Module
 typeCheckDeclarations m ass = case runStateT (tcCheckModule m ass) (TCState empty empty initCtx 0) of
                                 Left (TCError err) -> Left $ err
-                                Right (m',_) ->  Right m' -- updateTypes env (s ^. funcs)
+                                Right (m',_) ->  Right m'
 
 updateAss :: TySubst -> Ass -> Ass
 updateAss s = M.map (map (rewrite s))
+
+toEnv :: Ass -> M.Map VarName Type
+toEnv = M.map (\l -> if null l then TyUnknown else head l)

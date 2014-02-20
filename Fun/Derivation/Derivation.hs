@@ -6,7 +6,7 @@ import Fun.Decl.Error
 
 import Data.Monoid
 
--- import Control.Lens
+import Control.Lens
 
 -- | Una derivación contiene una especificación, un programa y la prueba
 --   de que ambos son equivalentes.
@@ -16,6 +16,13 @@ data Derivation = Derivation { deriv :: DerivDecl
                              , prog :: Maybe FunDecl
                              }
     deriving Eq
+
+
+derivDer :: Lens' Derivation DerivDecl
+derivDer = lens g s
+    where g (Derivation der _ _ _) = der
+          s drv der = drv {deriv = der }
+
 
 instance Show Derivation where
     show d = unlines [ "Derivación\nSpec: " ++ show (spec d) 

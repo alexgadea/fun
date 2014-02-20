@@ -30,7 +30,8 @@ import Control.Applicative((<$>))
 -- un contexto lleva la cuenta de todos los tipos que vamos viendo.
 
 type CtxSyn s = M.Map s [Type]
-    
+type Env = M.Map VarName Type
+
 -- | El contexto global es un conjunto con los contextos de cada tipo
 -- de s&#237;mbolo; el contexto para los cuantificadores es fijo,
 -- inicialmente tiene los cuantificadores "homog&#233;neos" (por ejemplo,
@@ -323,7 +324,7 @@ setType' :: TCCtx -> PreExpr -> PreExpr
 setType' ct e = setType v c o e
     where (v,c,o) = mkSubst ct
 
-checkWithEnv :: M.Map VarName Type -> PreExpr -> TyState Type
+checkWithEnv :: Env -> PreExpr -> TyState Type
 checkWithEnv env e = initCtxE e >> mapM_ (uncurry extCtxVar) (M.toList env) >> check e
 
 setTypeS :: PreExpr -> TyState PreExpr

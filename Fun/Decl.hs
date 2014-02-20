@@ -22,17 +22,17 @@ instance Show SpecDecl where
                                             ]
 
 
-specName :: Lens SpecDecl SpecDecl Variable Variable
+specName :: Lens' SpecDecl Variable
 specName = lens g s
     where g (Spec f _ _) = f
           s (Spec _ as spec) f = Spec f as spec
 
-specArgs :: Lens SpecDecl SpecDecl [Variable] [Variable]
+specArgs :: Lens' SpecDecl [Variable]
 specArgs = lens g s
     where g (Spec _ as _) = as
           s (Spec f _ spec) as = Spec f as spec
 
-specSpec :: Lens SpecDecl SpecDecl PE.PreExpr PE.PreExpr
+specSpec :: Lens' SpecDecl PE.PreExpr
 specSpec = lens g s
     where g (Spec _ _ spec) = spec
           s (Spec f as _) spec = Spec f as spec
@@ -61,7 +61,7 @@ instance Eq ThmDecl where
 data FunDecl = Fun Variable [Variable] PE.PreExpr (Maybe Text) -- Puede tener la verificación o no.
 
 
-funDeclName :: Lens FunDecl FunDecl Variable Variable
+funDeclName :: Lens' FunDecl Variable
 funDeclName = lens getFunName setFunName
     where setFunName :: FunDecl -> Variable -> FunDecl
           setFunName (Fun _ args e t) f = Fun f args e t
@@ -69,7 +69,7 @@ funDeclName = lens getFunName setFunName
           getFunName :: FunDecl -> Variable
           getFunName (Fun f _ _ _) = f
 
-funDeclArgs :: Lens FunDecl FunDecl [Variable] [Variable]
+funDeclArgs :: Lens' FunDecl [Variable]
 funDeclArgs = lens getFunArgs setFunArgs
     where setFunArgs :: FunDecl -> [Variable] -> FunDecl
           setFunArgs (Fun f _ e t) as = Fun f as e t
@@ -78,7 +78,7 @@ funDeclArgs = lens getFunArgs setFunArgs
           getFunArgs (Fun _ as _ _) = as
 
 
-funDeclBody :: Lens FunDecl FunDecl PE.PreExpr PE.PreExpr
+funDeclBody :: Lens' FunDecl PE.PreExpr
 funDeclBody = lens getFunBody setFunBody
     where setFunBody :: FunDecl -> PE.PreExpr -> FunDecl
           setFunBody (Fun f as _ t) e = Fun f as e t
@@ -94,7 +94,12 @@ instance Show FunDecl where
 
 -- POR QUE ESTA INSTANCIA ESTA DEFINIDA ASI??????
 instance Eq FunDecl where
-    (Fun f _ _ _) == (Fun f' _ _ _) = f == f'
+    (Fun f vs e _) == (Fun f' vs' e' _) = f == f'
+
+-- | otra forma de definir igualdad de declaración de funciones!!!
+isEq :: FunDecl -> FunDecl -> Bool
+isEq (Fun v vs expr _) (Fun v' vs' expr' _) = v==v' && vs==vs' && expr==expr'
+
 
 -- | Declaración de un valor.
 data ValDecl = Val Variable PE.PreExpr
@@ -126,8 +131,25 @@ data OpDecl = OpDecl Operator [Variable] PE.PreExpr
 instance Eq OpDecl where
     (OpDecl op _ _) == (OpDecl op' _ _) = op == op'
 
--- | Declaración de una derivación
+-- | Declaración de una derivación, el primer argumento es el nombre
+-- de la función y el segundo es la variable recursiva (según Manu).
 data DerivDecl = Deriv Variable Variable [(PE.Focus,Proof)]
+
+derFun :: Lens' DerivDecl Variable
+derFun = lens g s
+    where g (Deriv fun _ _) = fun
+          s (Deriv _ v css) fun = Deriv fun v css
+
+derVar :: Lens' DerivDecl Variable
+derVar = lens g s
+    where g (Deriv _ v _) = v
+          s (Deriv fun _ css) v = Deriv fun v css
+          
+derCases :: Lens' DerivDecl [(PE.Focus,Proof)]
+derCases = lens g s
+    where g (Deriv _ _ css) = css
+          s (Deriv fun v _) css = Deriv fun v css
+
 
 instance Show DerivDecl where
     show (Deriv v v' fps) = "Deriv "
@@ -208,8 +230,8 @@ instance Decl ValDecl where
                                   (GenConditions [])) (getRelationFromType te)
 
 instance Decl DerivDecl where
-    getNameDecl   (Deriv v _ _) = tRepr v
-    getFuncDecl   (Deriv v _ _) = Just v
+    getNameDecl   (Deriv fun _ _) = tRepr fun
+    getFuncDecl   (Deriv fun _ _) = Just fun
     getVarsDecl   (Deriv _ v _) = Just [v]
     getFocusProof (Deriv _ _ fps) = Just fps
     getExprDecl _ = Nothing
