@@ -86,7 +86,6 @@ checkModule m = do
       -- derivación.
       let eDerivs = createDerivations (m' ^. validDecls)
           
-    
       let validThms = rights thmsCheck ++ bareThms mImportedDecls
       let checkedDerivs = partitionEithers $ 
                L.map (checkDerivation (m' ^. validDecls) mImportedDecls validThms) eDerivs

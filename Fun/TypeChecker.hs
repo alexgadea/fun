@@ -191,3 +191,8 @@ updateAss s = M.map (map (rewrite s))
 
 toEnv :: Ass -> M.Map VarName Type
 toEnv = M.map (\l -> if null l then TyUnknown else head l)
+
+tcExprEnv :: M.Map VarName Type -> PreExpr -> Type
+tcExprEnv env e = case runStateT (checkWithEnv env e) (TCState empty empty initCtx 0) of
+                                Left (TCError _) -> TyUnknown
+                                Right (t,_) ->  t

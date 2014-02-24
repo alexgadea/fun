@@ -47,8 +47,14 @@ chkProof env (Ind c r ei ef f prfs) = checkWithEnv' env ei >>= \t ->
                                       setTypeS (toExpr ei) >>= \ei' ->                                      
                                       setTypeS (toExpr ef) >>= \ef' ->                                      
                                       setTypeS (toExpr f) >>= \f' ->
-                                      return (Ind c r (replace ei ei') (replace ef ef') (replace f f') prfs)                                 
+                                      mapM (chkIndCase env) prfs >>= \prfs' ->
+                                      return (Ind c r (replace ei ei') (replace ef ef') (replace f f') prfs')
 chkProof _ p = return p
+
+chkIndCase ::  Env -> (Focus, Proof) -> TIMonad (Focus,Proof)
+chkIndCase env (e,prf) = checkWithEnv' env e >>
+                         setTypeS (fst e) >>= \e' ->
+                         return ((e',snd e),prf)
 
 checkWithEnv' :: Env -> Focus -> TIMonad Type
 checkWithEnv' env f = checkWithEnv env (toExpr f)

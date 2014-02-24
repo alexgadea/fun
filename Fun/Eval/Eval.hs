@@ -1,11 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Fun.Eval.Eval where
+module Fun.Eval.Eval ( eval
+                     , evalTrace
+                     , evalStep
+                     , evalStepTrace
+                     , createEvalEnv
+                     , EvalEnv) where
 
 import Equ.PreExpr
 import Equ.IndTypes(getIndType)
-import Equ.IndType
-import Equ.TypeChecker(getType)
+import Equ.IndType (IndType,constants,isConstructor)
 import Equ.Matching(match)
+
+import Fun.TypeChecker
 
 import Prelude hiding(sum)
 
@@ -44,23 +50,27 @@ data SpecialRule a = SpecialRule {
 -- | Esta sería la función principal de evaluación
 --   Toma una expresión cualquiera y devuelve una expresión canónica.
 --   Se asume que las expresiones ESTAN BIEN TIPADAS
-eval :: EvalEnv -> PreExpr -> PreExpr
-eval env e = maybe e (\(e',env') -> eval env' e') $ runStateT (evalStep e) env
+eval :: PreExpr -> EvalEnv -> PreExpr
+eval e env = maybe e (uncurry eval) $ runStateT (evalStep e) env
                 
-evalTrace :: EvalEnv -> PreExpr -> (PreExpr,[(String,PreExpr)])
+evalTrace :: PreExpr -> EvalEnv -> (PreExpr,[(String,PreExpr)])
 evalTrace = evalTrace' []
                 
-evalTrace' :: [(String,PreExpr)] -> EvalEnv -> PreExpr -> (PreExpr,[(String,PreExpr)])
-evalTrace' steps env e =
+evalTrace' :: [(String,PreExpr)] -> PreExpr -> EvalEnv -> (PreExpr,[(String,PreExpr)])
+evalTrace' steps e env =
     maybe (e,steps)
-          (\((e',rulename),env') -> evalTrace' (steps++[(rulename,e')]) env' e')
+          (\((e',rulename),env') -> evalTrace' (steps++[(rulename,e')]) e' env')
           (runStateT (evalStepTrace e) env)
 
 isCan :: PreExpr -> EvalMonad Bool
-isCan e = lift (getType e >>= getIndType) >>= isCanonical e
+isCan e = do env <- get
+             let tyenv = mkTypeEnv env
+             let ty = tcExprEnv tyenv e
+             maybe (return False) (isCanonical e) $ getIndType ty 
+      where mkTypeEnv = M.foldrWithKey (\v _ -> M.insert (varName v) (varTy v)) M.empty 
 
 isCanonical :: PreExpr -> IndType -> EvalMonad Bool
-isCanonical (Con _) _ = return True
+isCanonical (Con c) t = return (c `elem` constants t)
 isCanonical (UnOp op e') t = isCan e' >>= return . (isConstructor t op &&)
 isCanonical (BinOp op e e') t = isCan e >>= \b ->
                                 isCan e' >>= \b' ->
@@ -141,12 +151,11 @@ evalStep' f sr (App v@(Var x) e2) =
            -- evalStep' v dará Nothing
            (evalStep' f sr v)
            
-evalStep' f sr (App e1 e2) =
+evalStep' f sr (App e1 e2) = 
      whenMT (isCan e1)
            -- Si e1 es canónica pero no es una variable, no se puede aplicar.
            (lift Nothing)
-           (evalStep' f sr e1 >>= 
-                return . first (flip App e2))
+           (evalStep' f sr e1 >>= return . first (flip App e2))
 evalStep' _ sr (Case e' ps) =
     matchPatterns e' ps >>= \(ei,subst) -> 
     return (applySubst ei subst,caseRule sr)

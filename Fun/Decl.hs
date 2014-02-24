@@ -9,7 +9,7 @@ import Equ.Proof
 import Equ.Types
 import Equ.Expr
 import Equ.TypeChecker (getType)
-import Equ.Theories (createHypothesis,makeExprFromRelation)
+import Equ.Theories (createHypothesis,makeExprFromRelation, createHypothesis')
 import Data.Text (pack,unpack,Text)
 import Control.Lens hiding (op)
 
@@ -181,20 +181,16 @@ instance Decl SpecDecl where
     getExprDecl (Spec _ _ e) = Just e
     getVarsDecl (Spec _ vs _) = Just vs
     getFocusProof _ = Nothing
-    createHypDecl (Spec f vs e) = 
-        getType e >>= \te -> (\rel ->
-        return $ createHypothesis (pack $ "spec "++show f)
-                                  (makeExprFromRelation rel (PE.exprApply f vs) e)
-                                  (GenConditions [])) (getRelationFromType te)
+    createHypDecl (Spec f vs e) = getType e >>= return . createHyp "spec" f vs e
+
 instance Decl PropDecl where
     getNameDecl (Prop t _) = t
     getFuncDecl _ = Nothing
     getExprDecl (Prop _ e) = Just e
     getVarsDecl _ = Nothing
     getFocusProof _ = Nothing
-    createHypDecl (Prop t e) =
-        Just $ createHypothesis (pack $ "prop "++ unpack t)
-                                (Expr e) (GenConditions [])
+    createHypDecl (Prop t e) = Just $ createHypothesis (pack $ "prop "++ unpack t)
+                                 (Expr e) (GenConditions [])
     
 instance Decl ThmDecl where
     getNameDecl (Thm t _) =  truthName t
@@ -211,12 +207,16 @@ instance Decl FunDecl where
     getExprDecl (Fun _ _ p _) = Just p
     getVarsDecl (Fun _ vs _ _) = Just vs
     getFocusProof _ = Nothing
-    createHypDecl (Fun f vs e _) = 
-        getType e >>= \te -> (\rel ->
-        return $ createHypothesis (pack $ "fun "++show f)
-                                  (makeExprFromRelation rel (PE.exprApply f vs) e)
-                                  (GenConditions [])) (getRelationFromType te)
-    
+    createHypDecl (Fun f vs e _) = getType e >>= return . createHyp "fun" f vs e
+
+createHyp :: String -> Variable -> [Variable] -> PE.PreExpr -> Type -> Hypothesis
+createHyp kind f vs e t = createHypothesis' (pack $ kind ++ " " ++ show f)
+                                           expr
+                                           rel
+                                           noCondition
+    where rel = getRelationFromType t
+          expr = makeExprFromRelation rel (PE.exprApply f vs) e
+
 instance Decl ValDecl where
     getNameDecl (Val v _) =  tRepr v
     getFuncDecl _ = Nothing

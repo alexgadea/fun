@@ -22,7 +22,7 @@ import qualified Data.List as L
 import qualified Data.Set as S 
 import qualified Data.Map as M
 import Data.Text hiding (map,concatMap,unlines,reverse,foldl)
-import Data.Maybe (fromJust,fromMaybe,mapMaybe)
+import Data.Maybe (fromMaybe,mapMaybe)
 import Data.Monoid
 import Text.Parsec.Pos (newPos)
 import Control.Arrow(second,(&&&))
@@ -256,8 +256,8 @@ hypListFromDecls decls thms = mapMaybe createHypDecl thms <>
     where hyps :: Decl d => (Declarations -> [Annot d]) -> Declarations -> [Hypothesis]
           hyps f ds = mapMaybe (createHypDecl . snd) $ f ds
         
--- Esta funcion agrega a una prueba las hipótesis correspondientes a todas las declaraciones
--- definidas y los teoremas validos.
+-- Esta funcion agrega a una prueba las hipótesis correspondientes a
+-- todas las declaraciones definidas y los teoremas validos.
 addDeclHypothesis :: Declarations -> [ThmDecl] -> Declarations -> Proof -> Proof
 addDeclHypothesis decls validThms mImportDecls pr = 
     foldl (\p h -> addCtxJust (addHypothesis' h M.empty) p) pr $ hypListFromDecls dswi validThms
@@ -291,10 +291,10 @@ checkArgsNotDup = map (ArgDuplicated . varName) . getDups
                                        else dups
 
 getFocusDecl :: Decl d => d -> PE.PreExpr
-getFocusDecl = fromJust . getExprDecl 
+getFocusDecl = fromMaybe (error "Not an expression!") .  getExprDecl
 
 checkIsPrg :: Decl d => d -> Bool
-checkIsPrg = isPrg . fromJust . getExprDecl
+checkIsPrg = isPrg . getFocusDecl
 
 -- | Chequeo por nombres de entidades duplicados. Puesto que las
 -- funciones pueden tener especificaciones, filtramos las
