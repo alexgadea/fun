@@ -1,7 +1,19 @@
-{-# Language TemplateHaskell, ViewPatterns #-}
--- | Definición de los distintos tipos de declaraciones y de los chequeos
+----------------------------------------------------------------------------
+-- |
+-- Module      :  $Header$
+-- Copyright   :  (c) Proyecto Theona, 2012-2013
+--                (c) Alejandro Gadea, Emmanuel Gunther, Miguel Pagano
+-- License     :  <license>
+-- 
+-- Maintainer  :  miguel.pagano+theona@gmail.com
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- Definición de los distintos tipos de declaraciones y de los chequeos
 -- asociados a cada uno de ellos.
-
+-- 
+----------------------------------------------------------------------------
+{-# Language TemplateHaskell, ViewPatterns #-}
 module Fun.Declarations where
 
 import Equ.Syntax hiding (Func)

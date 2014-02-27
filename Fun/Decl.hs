@@ -1,5 +1,20 @@
+
+----------------------------------------------------------------------------
+-- |
+-- Module      :  $Header$
+-- Copyright   :  (c) Proyecto Theona, 2012-2013
+--                (c) Alejandro Gadea, Emmanuel Gunther, Miguel Pagano
+-- License     :  <license>
+-- 
+-- Maintainer  :  miguel.pagano+theona@gmail.com
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- Definición de los tipos de declaraciones que tenemos en el lenguaje.
+-- 
+----------------------------------------------------------------------------
+
 {-# Language NoMonomorphismRestriction #-}
--- | Definición de los tipos de declaraciones que tenemos en el lenguaje.
 module Fun.Decl where
 
 import qualified Equ.PreExpr as PE

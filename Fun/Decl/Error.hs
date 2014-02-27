@@ -1,4 +1,17 @@
--- | Representación de errores para declaraciones.
+----------------------------------------------------------------------------
+-- |
+-- Module      :  $Header$
+-- Copyright   :  (c) Proyecto Theona, 2012-2013
+--                (c) Alejandro Gadea, Emmanuel Gunther, Miguel Pagano
+-- License     :  <license>
+-- 
+-- Maintainer  :  miguel.pagano+theona@gmail.com
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- Representación de errores para declaraciones.
+-- 
+----------------------------------------------------------------------------
 module Fun.Decl.Error where
 
 import Equ.Syntax

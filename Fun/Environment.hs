@@ -1,6 +1,20 @@
--- | Environment es el conjunto de módulos que se tienen cargados en un momento dado
---   en Fun. Cada vez que se hace un import desde un módulo, debe referirse a un
---   módulo que se encuentre en el environment.
+ -------------------------------------------------------------------------
+-- |
+-- Module      :  $Header$
+-- Copyright   :  (c) Proyecto Theona, 2012-2013
+--                (c) Alejandro Gadea, Emmanuel Gunther, Miguel Pagano
+-- License     :  <license>
+-- 
+-- Maintainer  :  miguel.pagano+theona@gmail.com
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- Environment es el conjunto de módulos que se tienen cargados en un
+-- momento dado en Fun. Cada vez que se hace un import desde un
+-- módulo, debe referirse a un módulo que se encuentre en el
+-- environment.
+-- 
+----------------------------------------------------------------------------
 {-# Language DoAndIfThenElse,TemplateHaskell #-}
 module Fun.Environment where
 
@@ -70,7 +84,7 @@ checkModule m = do
     let ass = getTypesAss mImports
 
     flip (either (\err -> return . Just $ createError (m ^. modName) ([],[],[],[],[],[],err)))
-         (typeCheckDeclarations m ass) $ \m' -> do    
+         (typeCheckDecls m ass) $ \m' -> do    
       let invalidSpec = lefts $ checkSpecs (m' ^. validDecls ) mImportedDecls
       let invalidFuns = lefts $ checkFuns  (m' ^. validDecls) mImportedDecls
 
@@ -187,9 +201,9 @@ getSpecs = concatMap (bare specs . (^. validDecls))
 getVals :: Environment -> [ValDecl]
 getVals = concatMap (bare vals . (^. validDecls))
 
-getTypesAss :: Environment -> [(VarName,[Type])]
+getTypesAss :: Environment -> [(VarName,Type)]
 getTypesAss = mconcat [ map (ass . (^. funDeclName)) . getFuncs
                       , map (ass . (^. specName))    . getSpecs
                       , map (ass . (^. valVar))      . getVals ]
-    where ass = (varName &&& return . varTy)
+    where ass = (varName &&& varTy)
              

@@ -1,3 +1,19 @@
+
+----------------------------------------------------------------------------
+-- |
+-- Module      :  $Header$
+-- Copyright   :  (c) Proyecto Theona, 2012-2013
+--                (c) Alejandro Gadea, Emmanuel Gunther, Miguel Pagano
+-- License     :  <license>
+-- 
+-- Maintainer  :  miguel.pagano+theona@gmail.com
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- Errores que pueden ocurrir en la verificación de corrección de una
+-- función respecto de su especificación.
+-- 
+----------------------------------------------------------------------------
 module Fun.Verification.Error where
 
 import Equ.PreExpr

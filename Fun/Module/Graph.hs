@@ -1,5 +1,18 @@
--- Representación de los modulos cargados en un environment en relación con sus
--- imports.
+----------------------------------------------------------------------------
+-- |
+-- Module      :  $Header$
+-- Copyright   :  (c) Proyecto Theona, 2012-2013
+--                (c) Alejandro Gadea, Emmanuel Gunther, Miguel Pagano
+-- License     :  <license>
+-- 
+-- Maintainer  :  miguel.pagano+theona@gmail.com
+-- Stability   :  experimental
+-- Portability :  portable
+--
+--  Representación de los modulos cargados en un environment en
+-- relación con sus imports.
+-- 
+----------------------------------------------------------------------------
 module Fun.Module.Graph where
 
 import Fun.Module

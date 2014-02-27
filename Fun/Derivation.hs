@@ -1,5 +1,19 @@
--- | Define la noción de derivación de una función en base a una especificación
--- y una prueba, es decir, una derivación propia de la función.
+----------------------------------------------------------------------------
+-- |
+-- Module      :  $Header$
+-- Copyright   :  (c) Proyecto Theona, 2012-2013
+--                (c) Alejandro Gadea, Emmanuel Gunther, Miguel Pagano
+-- License     :  <license>
+-- 
+-- Maintainer  :  miguel.pagano+theona@gmail.com
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- Define la noción de derivación de una función en base a una
+-- especificación y una prueba, es decir, una derivación propia de la
+-- función.
+-- 
+----------------------------------------------------------------------------
 module Fun.Derivation (
       Derivation (..)
     , module Fun.Derivation.Error
@@ -155,4 +169,3 @@ caseExprFromDerivation v derDecl = PE.Case pattern cases
          cases = L.map (PE.toExpr *** PE.toExpr . finalExpr) pfs
          finalExpr = fromRight . getEnd 
          fromRight = either (error "fromRight Left") id
-

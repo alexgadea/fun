@@ -1,4 +1,17 @@
--- | Define la noción de corrección para una derivación.
+----------------------------------------------------------------------------
+-- |
+-- Module      :  $Header$
+-- Copyright   :  (c) Proyecto Theona, 2012-2013
+--                (c) Alejandro Gadea, Emmanuel Gunther, Miguel Pagano
+-- License     :  <license>
+-- 
+-- Maintainer  :  miguel.pagano+theona@gmail.com
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- Define la noción de corrección para una derivación.
+-- 
+----------------------------------------------------------------------------
 module Fun.Verification (
       Verification (..)
     , module Fun.Verification.Error
@@ -17,8 +30,6 @@ import qualified Equ.PreExpr as PE
 
 import Data.List as L (map, find)
 import Data.Maybe (fromJust,catMaybes)
-
--- import Control.Lens
 
 -- | Crea una verificación, esto es, una especificación de una función,
 -- la función y una prueba de corrección de que la función se derivo en

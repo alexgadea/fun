@@ -1,3 +1,18 @@
+----------------------------------------------------------------------------
+-- |
+-- Module      :  $Header$
+-- Copyright   :  (c) Proyecto Theona, 2012-2013
+--                (c) Alejandro Gadea, Emmanuel Gunther, Miguel Pagano
+-- License     :  <license>
+-- 
+-- Maintainer  :  miguel.pagano+theona@gmail.com
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- Tipo de datos para verificaciones de que una función satisface su
+-- especificación.
+-- 
+----------------------------------------------------------------------------
 module Fun.Verification.Verification where
 
 import Fun.Decl

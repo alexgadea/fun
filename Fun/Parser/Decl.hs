@@ -1,4 +1,18 @@
--- | Este modulo es el parser de declaraciones.
+
+----------------------------------------------------------------------------
+-- |
+-- Module      :  $Header$
+-- Copyright   :  (c) Proyecto Theona, 2012-2013
+--                (c) Alejandro Gadea, Emmanuel Gunther, Miguel Pagano
+-- License     :  <license>
+-- 
+-- Maintainer  :  miguel.pagano+theona@gmail.com
+-- Stability   :  experimental
+-- Portability :  portable
+--
+-- Este modulo es el parser de declaraciones.
+-- 
+----------------------------------------------------------------------------
 module Fun.Parser.Decl where
 
 -- Imports de EQU.

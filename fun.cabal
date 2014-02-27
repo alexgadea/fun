@@ -34,15 +34,11 @@ Library
                             Fun.Module.Graph,
                             Fun.Parser, 
                             Fun.Parser.Decl,
-                            Fun.Parser.Import,
                             Fun.Parser.Internal,
                             Fun.Parser.Module,
                             Fun.Theories, 
                             Fun.Theory,
                             Fun.TypeChecker
-
-    Other-modules:          Fun.TypeChecker.Expr
-                            Fun.TypeChecker.Proof
 
     Build-depends:          base >= 4.2, text >= 0.11.1.5, 
                             containers >= 0.4.0.0, equ >= 0.2, 
