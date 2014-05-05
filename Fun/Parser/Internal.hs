@@ -33,6 +33,7 @@ import qualified Equ.Parser as EquP ( PProofState, PExprState
 
 -- Imports Fun.
 import Fun.Declarations
+import Fun.Decl
 import Fun.Decl.Error (DeclPos(..))
 import Fun.Module
 

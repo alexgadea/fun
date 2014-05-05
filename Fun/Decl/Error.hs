@@ -55,4 +55,4 @@ instance Show DeclError where
     show (InvalidProofForThm perr) = "Prueba invalida: " ++ show perr ++ "."
     show (DuplicateName t) = "Nombre duplicado: " ++ unpack t ++ "."
     show (ArgDuplicated t) = "Argumento duplicado: " ++ unpack t ++ "."
-    show (InvalidExprForThm e e') = "La expresión del teorema ("++show e' ++") no se corresponde con la expresión probada (" ++show e ++ ")."
+    show (InvalidExprForThm e e') = "La expresión del teorema ("++show e ++") no se corresponde con la expresión probada (" ++show e' ++ ")."

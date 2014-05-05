@@ -3,7 +3,7 @@ Version:             0.2
 Synopsis:            Derivador de programas a partir de especificaciones.
 Description:         Fun es una herramienta de ayuda para el aprendizaje de
                      la programación funcional.
-License:             GPL
+License:             GPL-3
 License-file:        LICENSE
 Author:              Renato Cherini, Alejandro Gadea, Emmanuel Gunther, Miguel Pagano
 Maintainer:          Miguel Pagano <pagano@famaf.unc.edu.ar>

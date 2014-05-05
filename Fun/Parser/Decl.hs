@@ -49,8 +49,7 @@ import Control.Applicative ((<$>),(<*>),(<$),(<*))
 
 -- Imports Fun.
 import Fun.Decl
-import Fun.Declarations ( Annot
-                        , Declarations
+import Fun.Declarations ( Declarations
                         , props
                         , derivs
                         , functions

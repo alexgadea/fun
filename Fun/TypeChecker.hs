@@ -1,4 +1,3 @@
-
 ----------------------------------------------------------------------------
 -- |
 -- Module      :  $Header$
@@ -15,10 +14,12 @@
 -- 
 ----------------------------------------------------------------------------
 {-# Language TemplateHaskell,DoAndIfThenElse #-}
-module Fun.TypeChecker where
+module Fun.TypeChecker ( tcExprEnv
+                       , typeCheckDecls
+                       ) where
 
 import Fun.Module
-import Fun.Declarations
+import Fun.Declarations hiding (checkThm)
 import Fun.Decl
 
 import Equ.PreExpr
@@ -39,35 +40,36 @@ import Control.Monad (when)
 import Control.Lens hiding (rewrite)
 import Control.Arrow (second)
 
-tcCheckDecl :: Variable -> [Variable] -> PreExpr -> TyState (VarName,PreExpr)
-tcCheckDecl fun args body = checkTypedDecl fun args body
-
+-- | Chequeo de la declaración de una especificación
 checkSpecDecl :: SpecDecl -> TyState (VarName,PreExpr)
-checkSpecDecl (Spec fun args body) = tcCheckDecl fun args body 
+checkSpecDecl (Spec fun args body) = checkTypedDecl fun args body
 
+-- | Chequeo de la declaración de una función
 checkFunDecl :: FunDecl -> TyState (VarName,PreExpr)
-checkFunDecl (Fun fun args body _) = tcCheckDecl fun args body 
+checkFunDecl (Fun fun args body _) = checkTypedDecl fun args body
 
+-- | Chequeo de la declaración de un valor
 checkVal :: Annot ValDecl -> TyState (Annot ValDecl)
 checkVal (pos,(Val v expr)) = checkWithEnv M.empty expr >>= \t ->
                               getType' (varTy v) >>= \t' ->
                               unifyS t t' >>
                               rewriteS t >>= \t'' ->
                               updAss' >> 
-                              setTypeS expr >>= \e -> return $ (pos,Val (setVarType t'' v) e)
+                              setTypeS expr >>= \e ->
+                              return $ (pos,Val (setVarType t'' v) e)
     where getType' TyUnknown = getFreshTyVar
           getType' t = return t
 
-tcCheckProp :: Annot PropDecl -> TyState (Annot PropDecl)
-tcCheckProp ap@(_,Prop pn expr) = mkCtxVar expr >> 
+checkProp :: Annot PropDecl -> TyState (Annot PropDecl)
+checkProp ap@(_,Prop pn expr) = mkCtxVar expr >> 
                                   checkWithEnv M.empty expr >>= \t -> 
                                   unifyS t (TyAtom ATyBool) >> 
                                   updAss' >>
                                   setTypeS expr >>= \e ->
                                   return $ second (const $ Prop pn e) ap
 
-tcCheckThm :: Annot ThmDecl -> TyState (Annot ThmDecl)
-tcCheckThm (pos,(Thm t e)) = mkCtxVar (getPreExpr . thExpr $ t) >>
+checkThm :: Annot ThmDecl -> TyState (Annot ThmDecl)
+checkThm (pos,(Thm t e)) = mkCtxVar (getPreExpr . thExpr $ t) >>
                              checkWithEnv M.empty (getPreExpr . thExpr $ t) >>= \ty ->
                              unifyS ty (TyAtom ATyBool) >>
                              checkWithEnv M.empty e >>= \ty' ->
@@ -81,13 +83,13 @@ tcCheckThm (pos,(Thm t e)) = mkCtxVar (getPreExpr . thExpr $ t) >>
 getFunType :: Variable -> TyState Type
 getFunType fun = do ass <- use (ctx . vars)
                     let t = M.lookup (varName fun) ass 
-                    maybe (fail $ "Función que no está en la lista de suposiciones") return t
+                    maybe (tyerr $ ErrNoType fun) return t
              
 checkDeriv :: Annot DerivDecl -> TyState (Annot DerivDecl)
 checkDeriv (pos,Deriv fun v css) = do ty <- getFunType fun
                                       let fun' = setVarType ty fun
                                       let argsTy = argsTypes ty
-                                      when (null argsTy) (fail "El tipo de la función no es funcional.")
+                                      when (null argsTy) (tyerr $ ErrNotFunType ty)
                                       let argTy = head argsTy
                                           env = M.singleton (varName v) argTy
                                           v' = setVarType argTy v
@@ -95,7 +97,7 @@ checkDeriv (pos,Deriv fun v css) = do ty <- getFunType fun
                                       return (pos,Deriv fun' v' css')
                                   
 checkCaseDeriv :: Env -> Type -> (Focus,Proof) -> TyState (Focus,Proof)
-checkCaseDeriv env tyArg ((e,pt),p)= mkCtxVar e >> 
+checkCaseDeriv env tyArg ((e,pt),p)= mkCtxVar e >>
                                      checkWithEnv M.empty e >>= \ty ->
                                      unifyS tyArg ty >> 
                                      use (ctx . vars) >>= \env' ->
@@ -106,26 +108,27 @@ checkCaseDeriv env tyArg ((e,pt),p)= mkCtxVar e >>
 checkTypedDecl :: Variable -> [Variable] -> PreExpr -> TyState (VarName,PreExpr)
 checkTypedDecl fun args body = do ass <- use (ctx . vars)
                                   ty <- getFunType fun
-                                  if arity ty /= length args
-                                  then fail $ "Unexpected number of arguments: " ++ show ty ++ " <> " ++ show args
-                                  else do 
-                                    let argsTy = argsTypes ty
-                                    let varsTy = fromList $ (varName fun,ty): zipWith (\v t' -> (varName v,t')) args argsTy
-                                    ty' <- checkWithEnv varsTy body
-                                    _ <- unifyS ty (exponential ty' argsTy)
-                                    body' <- setTypeS body
-                                    _ <- localState args
-                                    ass' <- use (ctx . vars)
-                                    _ <- updAss (M.union ass ass')
-                                    return (varName fun,body')
+                                  when (arity ty /= length args)
+                                       (tyerr $ ErrArity ty (length args))
+                                  let argsTy = argsTypes ty
+                                  let varsTy = fromList $ (varName fun,ty): zipWith (\v t' -> (varName v,t')) args argsTy
+                                  ty' <- checkWithEnv varsTy body
+                                  _ <- unifyS ty (exponential ty' argsTy)
+                                  body' <- setTypeS body
+                                  _ <- localState args
+                                  ass' <- use (ctx . vars)
+                                  _ <- updAss (M.union ass ass')
+                                  return (varName fun,body')
 
 addAssumption :: (Variable,[Variable]) -> TyState ()
-addAssumption (f,args) = use (ctx . vars) >>= \ass ->
-                         if varTy f /= TyUnknown
-                         then updAss $ M.insert (varName f) (varTy f) ass
-                         else replicateM (length args) getFreshTyVar >>= \ts ->
-                              getFreshTyVar >>= \tr ->
-                              updAss $ M.insert (varName f) (exponential tr ts) ass
+addAssumption (f,args) = do ass <- use (ctx . vars)
+                            tyFun <- case varTy f of
+                                       TyUnknown -> freshFunType (length args)
+                                       ty -> return ty
+                            updAss $ M.insert (varName f) tyFun ass
+   where freshFunType n = replicateM n getFreshTyVar >>= \ts ->
+                          getFreshTyVar >>= \tr ->
+                          return (exponential tr ts)
 
 tcCheckModule :: Module -> [(VarName,Type)] -> TyState Module
 tcCheckModule m a = do let dcls = m ^. validDecls
@@ -141,12 +144,12 @@ tcCheckModule m a = do let dcls = m ^. validDecls
                        updAss (M.fromList a)
                        mapM_ addAssumption env
 
-                       fbds <- mapM checkFunDecl fs
-                       sbds <- mapM checkSpecDecl sps
+                       fbds  <- mapM checkFunDecl fs
+                       sbds  <- mapM checkSpecDecl sps
                        drvs' <- mapM checkDeriv drvs
-                       vls' <- mapM checkVal vls
-                       thms' <- mapM tcCheckThm thms
-                       prps' <- mapM tcCheckProp prps
+                       vls'  <- mapM checkVal vls
+                       thms' <- mapM checkThm thms
+                       prps' <- mapM checkProp prps
 
                        env' <- use (ctx . vars)
 

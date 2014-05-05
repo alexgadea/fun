@@ -82,43 +82,42 @@ checkModule m = do
     let mImportedDecls = mconcat $ map (^. validDecls) mImports
 
     let ass = getTypesAss mImports
+    let tcRes = typeCheckDecls m ass
+    let m' = either (const m) id tcRes
+    let tcErr = either show (const "") tcRes
+    let invalidSpec = lefts $ checkSpecs (m' ^. validDecls ) mImportedDecls
+    let invalidFuns = lefts $ checkFuns  (m' ^. validDecls) mImportedDecls
 
-    flip (either (\err -> return . Just $ createError (m ^. modName) ([],[],[],[],[],[],err)))
-         (typeCheckDecls m ass) $ \m' -> do    
-      let invalidSpec = lefts $ checkSpecs (m' ^. validDecls ) mImportedDecls
-      let invalidFuns = lefts $ checkFuns  (m' ^. validDecls) mImportedDecls
-
-      let invalidVals = lefts $ checkVals  (m' ^. validDecls) mImportedDecls
+    let invalidVals = lefts $ checkVals  (m' ^. validDecls) mImportedDecls
 
 
 
-      let thmsCheck = checkThm (m' ^. validDecls) mImportedDecls
-      let invalidThms  = lefts thmsCheck
+    let thmsCheck = checkThm (m' ^. validDecls) mImportedDecls
+    let invalidThms  = lefts thmsCheck
 
-      -- Si hay derivaciones sin especificación, o derivaciones
-      -- repetidas, entonces la lista eDerivs tendrá errores de
-      -- derivación.
-      let eDerivs = createDerivations (m' ^. validDecls)
-          
-      let validThms = rights thmsCheck ++ bareThms mImportedDecls
-      let checkedDerivs = partitionEithers $ 
-               L.map (checkDerivation (m' ^. validDecls) mImportedDecls validThms) eDerivs
+    -- Si hay derivaciones sin especificación, o derivaciones
+    -- repetidas, entonces la lista eDerivs tendrá errores de
+    -- derivación.
+    let eDerivs = createDerivations (m' ^. validDecls)
+        
+    let validThms = rights thmsCheck ++ bareThms mImportedDecls
+    let checkedDerivs = partitionEithers $ 
+             L.map (checkDerivation (m' ^. validDecls) mImportedDecls validThms) eDerivs
     
-      let eVerifs = createVerifications (m' ^. validDecls) mImportedDecls
-      let checkedVerifs = partitionEithers $ L.map checkVerification eVerifs
+    let eVerifs = createVerifications (m' ^. validDecls) mImportedDecls
+    let checkedVerifs = partitionEithers $ L.map checkVerification eVerifs
     
-      let inDeclarations = InvalidDeclarations [] [] invalidThms [] [] (fst checkedDerivs)
+    let inDeclarations = InvalidDeclarations [] [] invalidThms [] [] (fst checkedDerivs)
 
-      let warning (inVerif,verif) ders = updateModuleEnv .
-                                         execState (do validDecls %= updateValidDecls inDeclarations ders;
-                                                       verifications .= verif;
-                                                       invalidDecls .= InvalidDeclsAndVerifs inDeclarations inVerif)
+    let warning (inVerif,verif) ders = updateModuleEnv .
+                                       execState (do validDecls %= updateValidDecls inDeclarations ders;
+                                                     verifications .= verif;
+                                                     invalidDecls .= InvalidDeclsAndVerifs inDeclarations inVerif)
 
 
-      case (invalidSpec, invalidFuns, invalidVals) of
+    case (invalidSpec, invalidFuns, invalidVals) of
           ([],[],[]) -> warning checkedVerifs (snd checkedDerivs) m'
-          (e1,e2,e3)  -> return . Just $ createError (m' ^. modName) errors
-              where errors = (e1,e2,e3,invalidThms,fst checkedVerifs,fst checkedDerivs,"")
+          (e1,e2,e3)  -> return . Just $ createError (m' ^. modName) e1 e2 e3 invalidThms (fst checkedVerifs) (fst checkedDerivs) tcErr
 
                            
 updateValidDecls :: InvalidDeclarations -> [Annot FunDecl] -> Declarations -> Declarations

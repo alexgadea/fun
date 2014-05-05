@@ -28,6 +28,11 @@ import Equ.Theories (createHypothesis,makeExprFromRelation, createHypothesis')
 import Data.Text (pack,unpack,Text)
 import Control.Lens hiding (op)
 
+import Fun.Decl.Error
+
+-- | Una declaración anotada tiene su posición.
+type Annot a = (DeclPos,a)
+
 -- | Especificaciones de funciones.
 data SpecDecl = Spec Variable [Variable] PE.PreExpr
 

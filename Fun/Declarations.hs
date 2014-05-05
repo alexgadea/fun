@@ -42,7 +42,6 @@ import Control.Arrow(second,(&&&))
 import Control.Monad.Trans.State
 import Control.Lens
 
-type Annot a = (DeclPos,a)
 
 data DefDuplicated = DSpec | DFun | DThm | DProp | DVal
     deriving Eq
