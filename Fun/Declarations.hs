@@ -20,8 +20,9 @@ import Equ.Syntax hiding (Func)
 import Equ.Expr (Expr(..))
 import qualified Equ.PreExpr as PE (PreExpr, freeVars)
 import Equ.Proof hiding (setCtx, getCtx)
-import Equ.Proof.Proof
+import Equ.Proof.Proof 
 import Equ.Types
+import Equ.Theories.FOL (true,equiv)
 
 import Fun.Theories
 import Fun.Theory
@@ -253,8 +254,11 @@ checkThm ds imds = merge' $ foldl chkThm ([],[]) thmDefs
                                validateProof . prfWithDecls thms
 
           -- | La expresión del teorema es la misma que la de la prueba.
+          -- O la expresión del teorema es @p@ y la prueba es @p == True@.
           chkThmExpr :: ThmDecl -> [DeclError]
-          chkThmExpr (Thm t e) = if e == e' then [] else [InvalidExprForThm e e']
+          chkThmExpr (Thm t e) = if e == e' || (equiv (Expr e) true) == (Expr e') 
+                                 then [] 
+                                 else [InvalidExprForThm e e']
                      where (Expr e') = thExpr t
 
 hypListFromDecls :: Declarations -> [ThmDecl] -> [Hypothesis]
