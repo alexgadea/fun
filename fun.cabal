@@ -46,4 +46,4 @@ Library
                             lens >= 3.9.0.2, fgl, either,
                             filepath
 
-    GHC-Options:         -Odph -Wall
+    GHC-Options:         -O2 -Wall
