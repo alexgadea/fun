@@ -69,16 +69,16 @@ checkProp ap@(_,Prop pn expr) = mkCtxVar expr >>
                                   return $ second (const $ Prop pn e) ap
 
 checkThm :: Annot ThmDecl -> TyState (Annot ThmDecl)
-checkThm (pos,(Thm t e)) = mkCtxVar (getPreExpr . thExpr $ t) >>
-                             checkWithEnv M.empty (getPreExpr . thExpr $ t) >>= \ty ->
-                             unifyS ty (TyAtom ATyBool) >>
-                             checkWithEnv M.empty e >>= \ty' ->
-                             unifyS ty' (TyAtom ATyBool) >>                             
-                             setTypeS (getPreExpr . thExpr $ t) >>= \e' ->
-                             setTypeS e >>= \e'' ->
-                             chkProof M.empty (thProof t) >>= \ p' ->
-                             return (pos,Thm (updThmPrf p' (updThmExp e' t)) e'')
-
+checkThm (pos,(Thm t e)) =
+                  mkCtxVar (getPreExpr . thExpr $ t) >>
+                  checkWithEnv M.empty (getPreExpr . thExpr $ t) >>= \ty ->
+                  unifyS ty (TyAtom ATyBool) >>
+                  checkWithEnv M.empty e >>= \ty' ->
+                  unifyS ty' (TyAtom ATyBool) >>
+                  setTypeS e >>= \e' ->
+                  setTypeS e >>= \e'' ->
+                  chkProof M.empty (thProof t) >>= \ p' ->
+                  return (pos,Thm (updThmPrf p' (updThmExp e' t)) e'')
 
 getFunType :: Variable -> TyState Type
 getFunType fun = do ass <- use (ctx . vars)

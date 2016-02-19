@@ -251,7 +251,7 @@ checkThm ds imds = merge' $ foldl chkThm ([],[]) thmDefs
 
           chkThmProof :: [ThmDecl] -> ThmDecl -> [DeclError]
           chkThmProof thms = either (return . InvalidProofForThm) (const []) . 
-                               validateProof . prfWithDecls thms
+                             validateProof . prfWithDecls thms
 
           -- | La expresión del teorema es la misma que la de la prueba.
           -- O la expresión del teorema es @p@ y la prueba es @p == True@.

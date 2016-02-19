@@ -88,7 +88,7 @@ listQuantifiers :: [Quantifier]
 listQuantifiers = EquList.theoryQuantifiersList
 
 listAxioms :: [Axiom]
-listAxioms = EquTh.listAxioms
+listAxioms = EquTh.axiomList
 
 listTheorems :: [Theorem]
 listTheorems = []

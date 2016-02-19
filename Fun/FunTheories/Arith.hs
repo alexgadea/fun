@@ -76,7 +76,7 @@ arithQuantifiers :: [Quantifier]
 arithQuantifiers = EquArith.theoryQuantifiersList
 
 arithAxioms :: [Axiom]
-arithAxioms = EquTh.arithAxioms
+arithAxioms = EquTh.axiomList
 
 arithTheorems :: [Theorem]
 arithTheorems = []

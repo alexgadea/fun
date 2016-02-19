@@ -90,8 +90,6 @@ checkModule m = do
 
     let invalidVals = lefts $ checkVals  (m' ^. validDecls) mImportedDecls
 
-
-
     let thmsCheck = checkThm (m' ^. validDecls) mImportedDecls
     let invalidThms  = lefts thmsCheck
 
@@ -138,8 +136,10 @@ loadMainModule path modN = liftIO (parseFromFileModule modN) >>= either (return 
                    return $ maybe (Right $ (^. modulesEnv) st) Left mErr
               where initCM = initStateCM (insModuleImports m emptyImMG) [m]
 
-loadMainModuleFromFile :: TextFilePath -> IO (Either ModuleError (Environment,ModName))
-loadMainModuleFromFile fp = parseFromFileModule fp >>= either (return . Left) load
+loadMainModuleFromFile :: TextFilePath ->
+                         IO (Either ModuleError (Environment,ModName))
+loadMainModuleFromFile fp = parseFromFileModule fp >>=
+                            either (return . Left) load
     where
         load m = runStateT (loadAndCheck m) initCM >>= \(mErr,st) ->
                  return $ maybe (Right (st ^. modulesEnv,m ^. modName)) Left mErr

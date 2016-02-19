@@ -65,7 +65,7 @@ boolQuantifiers :: [Quantifier]
 boolQuantifiers = EquFOL.theoryQuantifiersList
 
 boolAxioms :: [Axiom]
-boolAxioms = EquTh.listAxioms
+boolAxioms = EquTh.axiomList
 
 boolTheorems :: [Theorem]
 boolTheorems = []
