@@ -43,7 +43,6 @@ import Control.Arrow(second,(&&&))
 import Control.Monad.Trans.State
 import Control.Lens
 
-
 data DefDuplicated = DSpec | DFun | DThm | DProp | DVal
     deriving Eq
 
@@ -233,20 +232,24 @@ checkVals ds imds = checkDecls vals ds imds $ checkDecl checkDefVarVal
 checkThm :: Declarations -> Declarations ->
             [Either (ErrInDecl ThmDecl) ThmDecl]
 checkThm ds imds = merge' $ foldl chkThm ([],[]) thmDefs
-    where chkThm :: ([ErrInDecl ThmDecl],[ThmDecl]) -> Annot ThmDecl -> ([ErrInDecl ThmDecl],[ThmDecl])
-          chkThm prevs decl = check prevs decl $ L.concat 
-                                                  [ chkThmProof (snd prevs) (decl ^. _2)
-                                                  , checkDoubleDef decl (ds <> imds)
-                                                  , chkThmExpr (decl ^. _2) 
-                                                  ]
+    where chkThm :: ([ErrInDecl ThmDecl],[ThmDecl]) -> Annot ThmDecl ->
+                   ([ErrInDecl ThmDecl],[ThmDecl])
+          chkThm prevs decl = check prevs decl $ L.concat
+                              [ chkThmProof (snd prevs) (decl ^. _2)
+                              , checkDoubleDef decl (ds <> imds)
+                              , chkThmExpr (decl ^. _2)
+                              ]
 
-          prfWithDecls thms (Thm t _) = addDeclHypothesis ds (thms ++ bareThms imds) imds (thProof t)
+          prfWithDecls thms (Thm t _) = addDeclHypothesis ds
+                                                      (thms ++ bareThms imds)
+                                                      imds (thProof t)
           thmDefs :: [Annot ThmDecl]
           thmDefs = reverse $ ds ^. theorems
           merge' (ers,oks) = map Left ers ++ map Right oks
           
-          check :: ([ErrInDecl ThmDecl],[ThmDecl]) -> Annot ThmDecl -> [DeclError] -> ([ErrInDecl ThmDecl],[ThmDecl])
-          check prevs (_,thm) [] = over _2 (thm:) prevs
+          check :: ([ErrInDecl ThmDecl],[ThmDecl]) -> Annot ThmDecl ->
+                  [DeclError] -> ([ErrInDecl ThmDecl],[ThmDecl])
+          check prevs (_,(Thm t e)) [] = over _2 ((Thm (updThmExp e t) e):) prevs
           check prevs decl ers   = over _1 (mkErrInDecl decl ers:) prevs
 
           chkThmProof :: [ThmDecl] -> ThmDecl -> [DeclError]

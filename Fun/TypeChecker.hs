@@ -75,7 +75,7 @@ checkThm (pos,(Thm t e)) =
                   unifyS ty (TyAtom ATyBool) >>
                   checkWithEnv M.empty e >>= \ty' ->
                   unifyS ty' (TyAtom ATyBool) >>
-                  setTypeS e >>= \e' ->
+                  setTypeS (getPreExpr . thExpr $ t) >>= \e' ->
                   setTypeS e >>= \e'' ->
                   chkProof M.empty (thProof t) >>= \ p' ->
                   return (pos,Thm (updThmPrf p' (updThmExp e' t)) e'')
