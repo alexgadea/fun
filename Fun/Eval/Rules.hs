@@ -76,9 +76,9 @@ matchRule :: PreExpr -> EvalRule -> Maybe PreExpr
 matchRule e r =
     either (const Nothing)
            (-- ver qué pasa con el otro elemento que retorna match)
-            \(subst,_) -> return (rexpr r) >>=
-            \(Expr re) -> return (applySubst re subst))
-           (match lpreexpr e)
+            \_ -> return (rexpr r) >>=
+            \(Expr re) -> return re)
+           (match [] lpreexpr e)
            
     where Expr lpreexpr = lexpr r
     

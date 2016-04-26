@@ -78,8 +78,9 @@ checkRedef d d' = when (sameDecl d d') $ Left ([RedefinedDerivation $ getNameDec
 -- | Funcion que dada una derivacion dice si es válida o no. Esto es
 --   solo para las derivaciones por recursión. Si luego se implementa
 --   otro tipo de derivación, entonces debería diferenciarse.
-checkDer :: Declarations -> Declarations -> [ThmDecl] -> Derivation -> EDeriv' (Annot FunDecl)
-checkDer decls imDecls thms der = do
+checkDer :: [Operator] -> Declarations -> Declarations ->
+           [ThmDecl] -> Derivation -> EDeriv' (Annot FunDecl)
+checkDer pops decls imDecls thms der = do
                
                 let (declS,mDeclF,declD) = (spec der,prog der,deriv der) 
                 -- primero chequeamos que la variable sobre la que se hace
@@ -112,7 +113,7 @@ checkDer decls imDecls thms der = do
                                        pfs'
                      -- Agregamos todas las declaraciones como hipotesis                                       
                     prf = addDeclHypothesis decls thms imDecls prf'
-                    valPrf = validateProof prf
+                    valPrf = validateProof pops prf
                     funPos = derivPos der
                     derivedFun = createFunDecl declS vspec declD'
                 _ <- maybe (return ()) (isDeclared declD' derivedFun) mDeclF
@@ -139,9 +140,10 @@ mkIndHyp fun rel fexpr expr = createHypothesis name hypExpr (GenConditions [])
          where hypExpr = Expr $ PE.BinOp (relToOp rel) fexpr expr
                name = T.concat [T.pack "spec ",tRepr fun]
 
-checkDerivation :: Declarations -> Declarations -> [ThmDecl] -> 
+checkDerivation :: [Operator] -> Declarations -> Declarations -> [ThmDecl] ->
                    EDeriv -> EDeriv' (DeclPos,FunDecl)
-checkDerivation decls imDecls thms = either Left (checkDer decls imDecls thms) 
+checkDerivation pops decls imDecls thms =
+                either Left (checkDer pops decls imDecls thms) 
 
 getVarInSpec :: Variable -> SpecDecl -> DerivDecl -> EDeriv' Variable
 getVarInSpec v spc derDecl = getVarInSpec' v (spc ^. specArgs)

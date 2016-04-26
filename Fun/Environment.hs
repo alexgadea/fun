@@ -90,7 +90,7 @@ checkModule m = do
 
     let invalidVals = lefts $ checkVals  (m' ^. validDecls) mImportedDecls
 
-    let thmsCheck = checkThm (m' ^. validDecls) mImportedDecls
+    let thmsCheck = checkThm (m ^. pragmas) (m' ^. validDecls) mImportedDecls
     let invalidThms  = lefts thmsCheck
 
     -- Si hay derivaciones sin especificación, o derivaciones
@@ -100,7 +100,9 @@ checkModule m = do
         
     let validThms = rights thmsCheck ++ bareThms mImportedDecls
     let checkedDerivs = partitionEithers $ 
-             L.map (checkDerivation (m' ^. validDecls) mImportedDecls validThms) eDerivs
+             L.map (checkDerivation (m ^. pragmas) 
+                                    (m' ^. validDecls)
+                                    mImportedDecls validThms) eDerivs
     
     let eVerifs = createVerifications (m' ^. validDecls) mImportedDecls
     let checkedVerifs = partitionEithers $ L.map checkVerification eVerifs

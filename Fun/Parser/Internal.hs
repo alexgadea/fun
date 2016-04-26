@@ -48,15 +48,15 @@ data PDeclState = PDeclState { pDecls :: Declarations
 
 pdcls :: Lens' PDeclState Declarations
 pdcls = lens pDecls (\st d -> st {pDecls = d})
-                             
+
 instance EquP.PExprStateClass PDeclState where
     getExprState = pExprs
     setExprState declst es = declst { pExprs = es }
-    
+
 instance EquP.PProofStateClass PDeclState where
     getProofState = pProofs
     setProofState declst ps = declst { pProofs = ps }
-    
+
 type ParserD a = ParsecT String PDeclState Identity a
 
 lexer :: GenTokenParser String PDeclState Identity

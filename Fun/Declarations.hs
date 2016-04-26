@@ -229,9 +229,9 @@ checkVals ds imds = checkDecls vals ds imds $ checkDecl checkDefVarVal
 -- verificamos que la prueba sea correcta. A diferencia de las otras
 -- entidades, para los teoremas nos aseguramos que los teoremas usados
 -- sean correctos.
-checkThm :: Declarations -> Declarations ->
+checkThm :: [Operator] -> Declarations -> Declarations ->
             [Either (ErrInDecl ThmDecl) ThmDecl]
-checkThm ds imds = merge' $ foldl chkThm ([],[]) thmDefs
+checkThm pragmaOps ds imds = merge' $ foldl chkThm ([],[]) thmDefs
     where chkThm :: ([ErrInDecl ThmDecl],[ThmDecl]) -> Annot ThmDecl ->
                    ([ErrInDecl ThmDecl],[ThmDecl])
           chkThm prevs decl = check prevs decl $ L.concat
@@ -254,7 +254,7 @@ checkThm ds imds = merge' $ foldl chkThm ([],[]) thmDefs
 
           chkThmProof :: [ThmDecl] -> ThmDecl -> [DeclError]
           chkThmProof thms = either (return . InvalidProofForThm) (const []) . 
-                             validateProof . prfWithDecls thms
+                             validateProof pragmaOps . prfWithDecls thms
 
           -- | La expresión del teorema es la misma que la de la prueba.
           -- O la expresión del teorema es @p@ y la prueba es @p == True@.

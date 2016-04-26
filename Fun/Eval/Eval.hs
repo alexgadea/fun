@@ -195,7 +195,7 @@ matchPatterns :: PreExpr -> [(PreExpr,PreExpr)] -> EvalMonad (PreExpr,ExprSubst)
 matchPatterns _ [] = lift Nothing
 matchPatterns e ((p1,e1):ps) = either (const $ matchPatterns e ps)
                                       (\(subst,_) -> return (e1,subst))
-                                      (match p1 e)
+                                      undefined --(match [] p1 e)
 
 
 

@@ -16,6 +16,8 @@
 
 module Fun.Module where
 
+import Equ.Syntax ( Operator )
+
 import Fun.Verification
 import Fun.Declarations
 import Fun.Derivation
@@ -41,15 +43,14 @@ data Import = Import ModName
     deriving (Eq, Show)
 
                             
-data Module = Module { _modName       :: ModName
+data Module = Module { _pragmas       :: [Operator]
+                     , _modName       :: ModName
                      , _imports       :: [Import]
                      , _validDecls    :: Declarations
                      , _invalidDecls  :: InvalidDeclsAndVerifs
                      , _verifications :: [Verification]
                      , _derivations   :: [Derivation]
                      }
-
-
 $(makeLenses ''Module)
 
 imName :: Lens' Import ModName
@@ -61,6 +62,7 @@ instance Eq Module where
 instance Show Module where
     show m = unlines [ ""
                      , "========LoadModule========="
+                     , "Pragmas: " ++ show (_pragmas m)
                      , "ModName: " ++ show (_modName m)
                      , "Imports: " ++ show (_imports m)
                      , ""

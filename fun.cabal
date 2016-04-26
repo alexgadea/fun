@@ -32,10 +32,11 @@ Library
                             Fun.Module,
                             Fun.Module.Error,
                             Fun.Module.Graph,
-                            Fun.Parser, 
+                            Fun.Parser,
                             Fun.Parser.Decl,
                             Fun.Parser.Internal,
                             Fun.Parser.Module,
+                            Fun.Parser.Pragma,
                             Fun.Theories, 
                             Fun.Theory,
                             Fun.TypeChecker
