@@ -17,7 +17,7 @@ module Fun.Derivation.Error where
 
 import Equ.PreExpr
 import Equ.Proof
-import Data.Text
+import Data.Text hiding (show)
 
 type ErrInDeriv d = ([DerivationError],d)
 

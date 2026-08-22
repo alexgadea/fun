@@ -34,7 +34,7 @@ import Equ.IndType
 import qualified Data.List as L
 import qualified Data.Set as S 
 import qualified Data.Map as M
-import Data.Text hiding (map,concatMap,unlines,reverse,foldl)
+import Data.Text hiding (map,concatMap,unlines,reverse,foldl,show)
 import Data.Maybe (fromMaybe,mapMaybe)
 import Data.Monoid
 import Text.Parsec.Pos (newPos)
@@ -98,15 +98,16 @@ bare f = map snd . (^. f)
 bareThms :: Declarations -> [ThmDecl]
 bareThms = bare theorems
 
-instance Monoid Declarations where
-    mempty = Declarations [] [] [] [] [] [] []
-    mappend d' = execState $ do specs     %= (++ (d' ^. specs )) ;
+instance Semigroup Declarations where
+    (<>) d' = execState $ do specs     %= (++ (d' ^. specs )) ;
                                 functions %= (++ (d' ^. functions)) ;
                                 theorems  %= (++ (d' ^. theorems))  ;
                                 props     %= (++ (d' ^. props));
                                 vals      %= (++ (d' ^. vals));
                                 derivs    %= (++ (d' ^. derivs));
                                 indTypes  %= (++ (d' ^. indTypes))
+instance Monoid Declarations where
+    mempty = Declarations [] [] [] [] [] [] []
 
 filterValidDecls :: Declarations -> InvalidDeclarations -> Declarations                 
 filterValidDecls vds ivds = 
